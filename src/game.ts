@@ -631,7 +631,16 @@ export class Game {
         hit = true;
       }
     }
-    for (let i = 0; i < 6; i++) this.spark(hx, p.y + 1.2, hz, hex('#ffffff'), 3);
+    // swoosh arc in front of the player
+    for (let i = 0; i <= 12; i++) {
+      const a = p.yaw - 1.2 + (i / 12) * 2.4;
+      const rr = 1.5 + Math.sin((i / 12) * Math.PI) * 0.3;
+      this.particles.push({
+        x: p.x + Math.sin(a) * rr, y: p.y + 2.4 - (i / 12) * 1.6, z: p.z + Math.cos(a) * rr,
+        vx: Math.sin(a) * 2, vy: 0, vz: Math.cos(a) * 2, life: 0.12 + i * 0.008, max: 0.2,
+        col: i % 3 === 0 ? hex('#ffe23a') : 0xffffffff, size: 0.2, g: 0,
+      });
+    }
     if (hit) { this.hitstop = 0.06; this.cam.shake = Math.max(this.cam.shake, 0.6); }
   }
 
