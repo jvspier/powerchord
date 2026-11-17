@@ -23,8 +23,9 @@ npm run build    # type-check + production build into dist/
 On a phone (iPhone/Android): open the link, turn the phone sideways and play with the on-screen
 controls — a floating thumbstick on the left, JUMP / SMASH / PICK / CHORD / DASH / ACT on the right,
 and pause / rotate / music on the edge. Hold SMASH after a hit to charge the finisher. Tap the screen
-to start, advance dialogue and pick gigs in the tour van. For true fullscreen use Safari's
-**Share → Add to Home Screen**. (On iPhone, turn off silent mode to hear the music.)
+to start, advance dialogue and pick gigs in the tour van. The ⛶ button (top-left) goes
+fullscreen where the browser allows it (Android, iPad); iPhone Safari doesn't allow fullscreen web pages,
+so there it explains **Share → Add to Home Screen**, which launches the game without browser bars. (On iPhone, turn off silent mode to hear the music.)
 
 ## Controls
 

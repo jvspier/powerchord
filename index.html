@@ -52,6 +52,17 @@
       #b-chord { --c: #ff3aa8; right: calc(30px + env(safe-area-inset-right)); bottom: calc(104px + env(safe-area-inset-bottom)); }
       #b-dash { --c: #b45aff; right: calc(176px + env(safe-area-inset-right)); bottom: calc(40px + env(safe-area-inset-bottom)); }
       #b-act { --c: #80ff80; right: calc(186px + env(safe-area-inset-right)); bottom: calc(108px + env(safe-area-inset-bottom)); }
+      #b-full { --c: #3af0ff; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); font-size: 16px; }
+      body.standalone #b-full { display: none; }
+      #a2hs {
+        position: fixed; inset: 0; display: none; z-index: 20; align-items: center; justify-content: center;
+        background: rgba(7, 6, 10, 0.92); color: #fff; font: bold 14px/1.6 ui-monospace, Menlo, monospace; text-align: center;
+      }
+      #a2hs.show { display: flex; }
+      #a2hs .box { border: 3px solid #ff3aa8; box-shadow: 0 0 14px #ff3aa8; padding: 16px 22px; max-width: 80vw; background: #0e0a18; }
+      #a2hs b { color: #ffe23a; }
+      #a2hs .share { display: inline-block; border: 2px solid #3af0ff; border-radius: 4px; padding: 0 5px; color: #3af0ff; }
+      #a2hs .close { margin-top: 10px; color: #a0a0b0; font-size: 12px; }
       #b-pause { --c: #a0a0b0; right: calc(8px + env(safe-area-inset-right)); top: calc(8px + env(safe-area-inset-top)); }
       #b-rotl { --c: #a0a0b0; right: calc(8px + env(safe-area-inset-right)); top: calc(50px + env(safe-area-inset-top)); }
       #b-rotr { --c: #a0a0b0; right: calc(8px + env(safe-area-inset-right)); top: calc(92px + env(safe-area-inset-top)); }
@@ -81,6 +92,17 @@
       <div class="btn small" id="b-rotl" data-key="KeyQ">&#10226;</div>
       <div class="btn small" id="b-rotr" data-key="KeyE">&#10227;</div>
       <div class="btn small" id="b-pause" data-key="Escape">II</div>
+      <div class="btn small" id="b-full" title="Fullscreen">&#x26F6;</div>
+    </div>
+    <div id="a2hs">
+      <div class="box">
+        <b>FULLSCREEN ON IPHONE</b><br />
+        Safari can't make web pages fullscreen on iPhone, but the home screen app can:<br />
+        1. Tap the <span class="share">Share &#x2B06;</span> button in Safari<br />
+        2. Choose <b>Add to Home Screen</b><br />
+        3. Launch <b>Power Chord</b> from your home screen - no browser bars!
+        <div class="close">TAP ANYWHERE TO CLOSE</div>
+      </div>
     </div>
     <div id="rotate"><span>&#10227;</span>TURN YOUR PHONE SIDEWAYS<br />TO ROCK OUT</div>
     <script type="module" src="./src/main.ts"></script>

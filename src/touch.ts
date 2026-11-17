@@ -74,7 +74,7 @@ export function setupTouch(game: Game, canvas: HTMLCanvasElement) {
   zone.addEventListener('pointercancel', endStick);
 
   // ---- buttons: each maps onto the equivalent keyboard key ----
-  for (const el of Array.from(root.querySelectorAll<HTMLElement>('.btn'))) {
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('.btn[data-key]'))) {
     const code = el.dataset.key!;
     const up = (e: PointerEvent) => {
       e.preventDefault();
@@ -95,9 +95,52 @@ export function setupTouch(game: Game, canvas: HTMLCanvasElement) {
     el.addEventListener('lostpointercapture', () => { el.classList.remove('on'); inp.release(code); });
   }
 
+  setupFullscreen(game);
+
   // dim buttons for abilities you haven't learned yet
   const abilityBtns = Array.from(root.querySelectorAll<HTMLElement>('[data-ability]'));
   setInterval(() => {
     for (const el of abilityBtns) el.classList.toggle('locked', !game.has(el.dataset.ability as never));
   }, 500);
+}
+
+type FsDoc = Document & { webkitFullscreenEnabled?: boolean; webkitFullscreenElement?: Element };
+type FsEl = HTMLElement & { webkitRequestFullscreen?: () => void };
+
+/** Real fullscreen where the browser allows it (Android, iPad, desktop); on iPhone,
+ *  where Safari only allows fullscreen video, explain Add to Home Screen instead. */
+function setupFullscreen(game: Game) {
+  const btn = document.getElementById('b-full')!;
+  const help = document.getElementById('a2hs')!;
+  const doc = document as FsDoc;
+  const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  if (standalone) document.body.classList.add('standalone');
+  const isFull = () => !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    game.audio.init();
+    if (isFull()) {
+      (document.exitFullscreen?.() ?? Promise.resolve()).catch(() => {});
+      return;
+    }
+    const el = document.documentElement as FsEl;
+    if (doc.fullscreenEnabled && el.requestFullscreen) {
+      el.requestFullscreen({ navigationUI: 'hide' })
+        .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape'))
+        .catch(() => {});
+    } else if (doc.webkitFullscreenEnabled && el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    } else {
+      if (game.state === 'play') game.state = 'pause';
+      help.classList.add('show');
+    }
+  });
+  help.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    help.classList.remove('show');
+  });
+  const onChange = () => window.dispatchEvent(new Event('resize'));
+  document.addEventListener('fullscreenchange', onChange);
+  document.addEventListener('webkitfullscreenchange', onChange);
 }
