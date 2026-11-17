@@ -136,6 +136,7 @@ export class Game {
   slowmo = 0;
   slowFactor = 0.35;
   showFps = false;
+  touch = false; // on-screen controls are active (phones/tablets)
   fps = 60;
   finalWon = false;
   gateHintT = 0;
@@ -309,7 +310,42 @@ export class Game {
     }
   }
 
+  /** Swap keyboard wording for on-screen button names on touch devices. */
+  tt(s: string) {
+    if (!this.touch) return s;
+    return s.replace('PRESS L TO', 'TAP CHORD TO').replace('PRESS L:', 'CHORD:').replace('PRESS SHIFT', 'TAP DASH')
+      .replace('PRESS JUMP', 'TAP JUMP').replace('[ENTER]', '[ACT]');
+  }
+
+  /** A tap on the game screen (framebuffer coordinates), used for menus on touch devices. */
+  tap(fx: number, fy: number) {
+    const inp = this.input;
+    switch (this.state) {
+      case 'title':
+        this.audio.init();
+        this.startGame(this.hasSave && fy >= 134 && fy <= 150);
+        break;
+      case 'dialog':
+      case 'victory':
+        inp.press('Enter'); inp.release('Enter');
+        break;
+      case 'pause':
+        this.state = 'play';
+        break;
+      case 'map': {
+        const i = Math.floor((fy - 48) / 19);
+        if (fx < 40 || fx > W - 40 || fy < 30 || fy > H - 30) { this.state = 'play'; break; }
+        if (i >= 0 && i < WORLDS.length && i <= this.save.unlocked) {
+          if (i === this.mapSel) { this.state = 'play'; this.loadWorld(i); }
+          else { this.mapSel = i; this.audio.sfx('select'); }
+        }
+        break;
+      }
+    }
+  }
+
   msg(text: string, t = 3, col = 0xffffffff) {
+    text = this.tt(text);
     this.messages.push({ text, t, col });
     if (this.messages.length > 4) this.messages.shift();
   }
@@ -436,8 +472,13 @@ export class Game {
     const start = fresh ? 0 : this.save.unlocked;
     this.loadWorld(Math.min(start, WORLDS.length - 1));
     if (this.save.beaten.length === 0) {
-      this.msg('WASD MOVE  SPACE JUMP  J SMASH  K PICKS', 7);
-      this.msg('HOLD J AFTER A SMASH TO CHARGE A FINISHER   Q/E: ROTATE VIEW', 7);
+      if (this.touch) {
+        this.msg('LEFT THUMB: MOVE   BUTTONS: JUMP, SMASH, PICK', 7);
+        this.msg('KEEP HOLDING SMASH AFTER A HIT TO CHARGE A FINISHER', 7);
+      } else {
+        this.msg('WASD MOVE  SPACE JUMP  J SMASH  K PICKS', 7);
+        this.msg('HOLD J AFTER A SMASH TO CHARGE A FINISHER   Q/E: ROTATE VIEW', 7);
+      }
     }
   }
 
@@ -477,7 +518,7 @@ export class Game {
     const ix = (inp.held('KeyD', 'ArrowRight') ? 1 : 0) - (inp.held('KeyA', 'ArrowLeft') ? 1 : 0);
     const iy = (inp.held('KeyW', 'ArrowUp') ? 1 : 0) - (inp.held('KeyS', 'ArrowDown') ? 1 : 0);
     const cy = this.cam.isoYaw;
-    const jx = ix + inp.padX, jy = iy + inp.padY;
+    const jx = ix + inp.padX + inp.touchX, jy = iy + inp.padY + inp.touchY;
     let mx = Math.sin(cy) * jy + Math.cos(cy) * jx;
     let mz = Math.cos(cy) * jy - Math.sin(cy) * jx;
     const ml = Math.hypot(mx, mz);
@@ -1547,9 +1588,10 @@ export class Game {
       my += 9;
     }
     if (this.prompt && st === 'play') {
-      const pw = r.textWidth(this.prompt) + 8;
+      const prompt = this.tt(this.prompt);
+      const pw = r.textWidth(prompt) + 8;
       r.rect((W - pw) / 2, H - 46, pw, 11, 0xff000000, 0.6);
-      r.textCentered(this.prompt, H - 43, 0xffffffff);
+      r.textCentered(prompt, H - 43, 0xffffffff);
     }
 
     if (st === 'dialog' && this.dialog) {
@@ -1558,7 +1600,7 @@ export class Game {
       r.rect(20, H - 64, W - 40, 1, hex('#ff3aa8'));
       r.rect(20, H - 15, W - 40, 1, hex('#ff3aa8'));
       r.text(d.name, 28, H - 58, hex('#ff3aa8'));
-      const line = d.lines[d.i];
+      const line = this.tt(d.lines[d.i]);
       const shown = line.slice(0, Math.floor(d.t * 40));
       // wrap
       const words = shown.split(' ');
@@ -1568,7 +1610,7 @@ export class Game {
         row += wd + ' ';
       }
       r.text(row, 28, y, 0xffffffff);
-      if (Math.floor(this.time * 3) % 2) r.text('ENTER >', W - 62, H - 24, hex('#a0a0b0'));
+      if (Math.floor(this.time * 3) % 2) r.text(this.touch ? 'TAP >' : 'ENTER >', W - 62, H - 24, hex('#a0a0b0'));
     }
     if (st === 'map') this.drawMap();
     if (st === 'pause') this.drawPause();
@@ -1612,9 +1654,12 @@ export class Game {
     const y = 34 + Math.round(Math.sin(t * 2) * 2);
     r.textCentered('A GRUNGE ODYSSEY', y + 54, hex('#ffe23a'), 2);
     r.textCentered('FLANNEL VS. SPANDEX', y + 70, hex('#c0c8d0'));
-    if (Math.floor(t * 2) % 2 === 0) r.textCentered(this.hasSave ? 'PRESS ENTER TO CONTINUE' : 'PRESS ENTER TO START', 130, 0xffffffff);
-    if (this.hasSave) r.textCentered('N: NEW GAME', 140, hex('#a0a0b0'));
-    const lines = ['WASD/ARROWS MOVE  SPACE JUMP  J SMASH  K THROW PICK', 'L POWER CHORD  SHIFT DASH  Q/E ROTATE VIEW  M MUSIC'];
+    const verb = this.touch ? 'TAP' : 'PRESS ENTER';
+    if (Math.floor(t * 2) % 2 === 0) r.textCentered(this.hasSave ? `${verb} TO CONTINUE` : `${verb} TO START`, 124, 0xffffffff);
+    if (this.hasSave) r.textCentered(this.touch ? '[ TAP HERE FOR A NEW GAME ]' : 'N: NEW GAME', 140, hex('#a0a0b0'));
+    const lines = this.touch
+      ? ['LEFT THUMB MOVES - BUTTONS ON THE RIGHT TO ROCK', 'TIP: ADD TO HOME SCREEN FOR FULLSCREEN']
+      : ['WASD/ARROWS MOVE  SPACE JUMP  J SMASH  K THROW PICK', 'L POWER CHORD  SHIFT DASH  Q/E ROTATE VIEW  M MUSIC'];
     lines.forEach((l, i) => r.textCentered(l, H - 24 + i * 9, hex('#c0c0c0')));
   }
 
@@ -1638,7 +1683,7 @@ export class Game {
         r.text(st, W - 54 - r.textWidth(st), y, beaten ? hex('#80ff80') : hex('#ff8080'));
       }
     });
-    r.textCentered('UP/DOWN SELECT   ENTER TRAVEL   ESC CANCEL', H - 42, hex('#a0a0b0'));
+    r.textCentered(this.touch ? 'TAP A GIG TO SELECT, TAP AGAIN TO TRAVEL' : 'UP/DOWN SELECT   ENTER TRAVEL   ESC CANCEL', H - 42, hex('#a0a0b0'));
   }
 
   drawPause() {
@@ -1651,8 +1696,13 @@ export class Game {
       'Q / E ............. ROTATE THE VIEW',  'ENTER / F ......... INTERACT',
       'M ................. MUSIC ON/OFF', '` ................. FPS',
     ];
-    lines.forEach((l, i) => r.text(l, 60, 60 + i * 10, 0xffffffff));
-    r.textCentered('ESC TO RESUME', H - 20, hex('#a0a0b0'));
+    if (this.touch) {
+      ['LEFT THUMB ........ MOVE', 'JUMP .............. JUMP (AGAIN IN AIR: STAGE DIVE)', 'SMASH ............. GUITAR SMASH',
+        'HOLD SMASH ........ CHARGED FINISHER (COSTS FEEDBACK)', 'PICK .............. THROW PICK', 'CHORD ............. POWER CHORD',
+        'DASH .............. MOSH DASH', 'ACT ............... TOUR VAN / CONFIRM', 'ARROWS ............ ROTATE THE VIEW',
+      ].forEach((l, i) => r.text(l, 60, 60 + i * 10, 0xffffffff));
+    } else lines.forEach((l, i) => r.text(l, 60, 60 + i * 10, 0xffffffff));
+    r.textCentered(this.touch ? 'TAP TO RESUME' : 'ESC TO RESUME', H - 20, hex('#a0a0b0'));
   }
 
   drawVictory() {
@@ -1666,6 +1716,6 @@ export class Game {
     const tapes = this.save.collected.filter((c) => c.endsWith('tape')).length;
     const pouches = this.save.collected.filter((c) => c.endsWith('pouch')).length;
     r.textCentered(`MIXTAPES ${tapes}/${WORLDS.length}   PICK POUCHES ${pouches}/${WORLDS.length}`, 112, hex('#ff3aa8'));
-    if (this.victoryT > 3 && Math.floor(this.time * 2) % 2) r.textCentered('PRESS ENTER', 140, hex('#a0a0b0'));
+    if (this.victoryT > 3 && Math.floor(this.time * 2) % 2) r.textCentered(this.touch ? 'TAP TO PLAY AGAIN' : 'PRESS ENTER', 140, hex('#a0a0b0'));
   }
 }

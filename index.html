@@ -2,16 +2,85 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Power Chord" />
+    <meta name="theme-color" content="#07060a" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <link rel="icon" type="image/png" href="./icon-192.png" />
     <title>Power Chord</title>
     <style>
       html, body { margin: 0; height: 100%; background: #07060a; overflow: hidden; }
-      body { display: flex; align-items: center; justify-content: center; }
-      canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; outline: none; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+      }
+      canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; outline: none; touch-action: none; }
+
+      /* ---- touch controls (shown only on touch devices) ---- */
+      #touch { position: fixed; inset: 0; display: none; pointer-events: none; font: bold 11px/1 ui-monospace, Menlo, monospace; }
+      body.touch #touch { display: block; }
+      #stickzone { position: absolute; left: 0; top: 0; bottom: 0; width: 45%; pointer-events: auto; }
+      #stick {
+        position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+        border: 3px solid rgba(255, 58, 168, 0.55); background: rgba(10, 6, 20, 0.28); pointer-events: none;
+        left: calc(96px + env(safe-area-inset-left)); top: calc(100% - 96px - env(safe-area-inset-bottom));
+      }
+      #knob {
+        position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
+        background: rgba(255, 58, 168, 0.75); box-shadow: 0 0 10px rgba(255, 58, 168, 0.8);
+      }
+      .btn {
+        position: absolute; pointer-events: auto; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        color: #fff; text-shadow: 1px 1px 0 #000; letter-spacing: 0.5px; background: rgba(10, 6, 20, 0.35);
+        border: 3px solid var(--c); box-shadow: 0 0 8px var(--c), inset 0 0 8px var(--c); transition: transform 0.05s;
+      }
+      .btn.on { transform: scale(0.9); background: var(--c); }
+      .btn.locked { opacity: 0.25; }
+      .btn.big { width: 70px; height: 70px; font-size: 12px; }
+      .btn.mid { width: 56px; height: 56px; }
+      .btn.small { width: 34px; height: 34px; font-size: 13px; border-radius: 9px; }
+      #b-jump { --c: #3af0ff; right: calc(18px + env(safe-area-inset-right)); bottom: calc(22px + env(safe-area-inset-bottom)); }
+      #b-smash { --c: #ff8a20; right: calc(98px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom)); }
+      #b-pick { --c: #ffe23a; right: calc(116px + env(safe-area-inset-right)); bottom: calc(98px + env(safe-area-inset-bottom)); }
+      #b-chord { --c: #ff3aa8; right: calc(30px + env(safe-area-inset-right)); bottom: calc(104px + env(safe-area-inset-bottom)); }
+      #b-dash { --c: #b45aff; right: calc(176px + env(safe-area-inset-right)); bottom: calc(40px + env(safe-area-inset-bottom)); }
+      #b-act { --c: #80ff80; right: calc(186px + env(safe-area-inset-right)); bottom: calc(108px + env(safe-area-inset-bottom)); }
+      #b-pause { --c: #a0a0b0; right: calc(8px + env(safe-area-inset-right)); top: calc(8px + env(safe-area-inset-top)); }
+      #b-rotl { --c: #a0a0b0; right: calc(8px + env(safe-area-inset-right)); top: calc(50px + env(safe-area-inset-top)); }
+      #b-rotr { --c: #a0a0b0; right: calc(8px + env(safe-area-inset-right)); top: calc(92px + env(safe-area-inset-top)); }
+      #b-music { --c: #a0a0b0; right: calc(8px + env(safe-area-inset-right)); top: calc(134px + env(safe-area-inset-top)); }
+
+      /* ---- ask to rotate in portrait ---- */
+      #rotate {
+        position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+        background: #07060a; color: #ff3aa8; font: bold 16px/1.5 ui-monospace, Menlo, monospace; text-align: center; z-index: 10;
+      }
+      #rotate span { color: #ffe23a; font-size: 40px; }
+      @media (orientation: portrait) { body.touch #rotate { display: flex; } }
     </style>
   </head>
   <body>
     <canvas id="game" tabindex="0"></canvas>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="touch">
+      <div id="stickzone"></div>
+      <div id="stick"><div id="knob"></div></div>
+      <div class="btn big" id="b-jump" data-key="Space">JUMP</div>
+      <div class="btn big" id="b-smash" data-key="KeyJ">SMASH</div>
+      <div class="btn mid" id="b-pick" data-key="KeyK">PICK</div>
+      <div class="btn mid" id="b-chord" data-key="KeyL" data-ability="chord">CHORD</div>
+      <div class="btn mid" id="b-dash" data-key="ShiftLeft" data-ability="dash">DASH</div>
+      <div class="btn mid" id="b-act" data-key="Enter">ACT</div>
+      <div class="btn small" id="b-music" data-key="KeyM">&#9835;</div>
+      <div class="btn small" id="b-rotl" data-key="KeyQ">&#10226;</div>
+      <div class="btn small" id="b-rotr" data-key="KeyE">&#10227;</div>
+      <div class="btn small" id="b-pause" data-key="Escape">II</div>
+    </div>
+    <div id="rotate"><span>&#10227;</span>TURN YOUR PHONE SIDEWAYS<br />TO ROCK OUT</div>
+    <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

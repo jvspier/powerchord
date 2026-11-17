@@ -37,6 +37,17 @@ export class Input {
   pressed(...codes: string[]) {
     return codes.some((c) => this.pressedSet.has(c));
   }
+  // ---- virtual (on-screen) controls ----
+  touchX = 0;
+  touchY = 0;
+  press(code: string) {
+    this.pressedSet.add(code);
+    this.down.add(code);
+  }
+  release(code: string) {
+    this.down.delete(code);
+  }
+
   /** call at end of each fixed update */
   endFrame() {
     this.pressedSet.clear();

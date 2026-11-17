@@ -15,6 +15,16 @@ npm run dev      # http://localhost:5173
 npm run build    # type-check + production build into dist/
 ```
 
+## Play it
+
+**https://jvspier.github.io/powerchord/** — published to GitHub Pages by `.github/workflows/pages.yml` on every push.
+
+On a phone (iPhone/Android): open the link, turn the phone sideways and play with the on-screen
+controls — a floating thumbstick on the left, JUMP / SMASH / PICK / CHORD / DASH / ACT on the right,
+and pause / rotate / music on the edge. Hold SMASH after a hit to charge the finisher. Tap the screen
+to start, advance dialogue and pick gigs in the tour van. For true fullscreen use Safari's
+**Share → Add to Home Screen**. (On iPhone, turn off silent mode to hear the music.)
+
 ## Controls
 
 | Action | Keyboard | Gamepad |
