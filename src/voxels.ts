@@ -103,6 +103,17 @@ export const M = {
   PYRO: def('pyro', '#ff7a20', 0.2, { emissive: true, hazard: true }),
   SPOT_W: def('spot_w', '#fff6d0', 0.02, { emissive: true }),
   ARCADE: def('arcade', '#2a1a4a', 0.05),
+  ARCADE2: def('arcade2', '#7a1a2a', 0.05),
+  ARCADE3: def('arcade3', '#1a2a6a', 0.05),
+  ACARPET: def('acarpet', '#1a1838', 0.05),
+  ACARPET2: def('acarpet2', '#2a1440', 0.05),
+  ACARPET3: def('acarpet3', '#0e2a38', 0.05),
+  SKATE: def('skate', '#bab6ae', 0.04),
+  POOL: def('pool', '#7ab8d8', 0.04),
+  COPING: def('coping', '#c8ccd4', 0.03),
+  GRAF_P: def('graf_p', '#e04a9a', 0.05),
+  GRAF_O: def('graf_o', '#f08a2a', 0.05),
+  GRAF_G: def('graf_g', '#5ad04a', 0.05),
 };
 
 export interface Lighting {

@@ -5,10 +5,10 @@
 import { VoxelWorld, M, Lighting } from './voxels';
 import { RNG, hex, hash2, clamp } from './math';
 
-export type Ability = 'chord' | 'dive' | 'dash';
+export type Ability = 'chord' | 'dive' | 'dash' | 'spread' | 'overdrive';
 export type EnemyKind = 'poser' | 'drone' | 'roadie';
 export type GateKind = 'none' | 'amp' | 'cliff' | 'chasm';
-export type Theme = 'city' | 'video' | 'mall' | 'venue';
+export type Theme = 'city' | 'video' | 'skate' | 'mall' | 'arcade' | 'venue';
 
 export interface WorldDef {
   name: string;
@@ -59,6 +59,16 @@ export const WORLDS: WorldDef[] = [
     enemies: ['poser', 'roadie', 'drone', 'poser'],
   },
   {
+    name: 'SHRED PARK', subtitle: 'NO SKATEBOARDING? YEAH RIGHT.', seed: 505, theme: 'skate',
+    skyTop: hex('#3a5aa8'), skyBot: hex('#ffb070'), fog: hex('#e0a888'), stars: false, weather: 'dust',
+    light: { sun: norm(-0.55, 0.6, 0.45), sunInt: 0.5, ambient: 0.6, sunColor: hex('#ffd0a0') },
+    gate: 'cliff', gateHint: 'THE VERT RAMP IS WAY TOO TALL. A STAGE DIVE MIGHT GET YOU UP THERE.', gateHintHave: '',
+    boss: 4, bossName: 'RAD CHAD', reward: 'spread',
+    bossLines: ['WHOA, A FLANNEL? THAT IS SO NOT RADICAL.', 'THIS IS MY PARK, POSER.', 'PREPARE TO EAT CONCRETE, DUDE!'],
+    rewardText: 'TRIPLE PICK! YOUR PICK THROWS NOW FAN OUT THREE AT A TIME.',
+    enemies: ['poser', 'poser', 'roadie', 'drone'],
+  },
+  {
     name: 'GALLERIA MALL', subtitle: 'OPEN LATE ALL WEEKEND', seed: 303, theme: 'mall',
     skyTop: hex('#6a9ac8'), skyBot: hex('#d8e4ec'), fog: hex('#b8c8d4'), stars: false, weather: 'neon',
     light: { sun: norm(-0.3, 0.9, 0.3), sunInt: 0.42, ambient: 0.68, sunColor: hex('#fff4e0') },
@@ -67,6 +77,16 @@ export const WORLDS: WorldDef[] = [
     bossLines: ['WELCOME TO THE FOOD COURT, FLANNEL BOY.', 'GUITARS ARE OVER. THE FUTURE IS SYNTH-ETIC!', 'FEEL THE KEYTAR!'],
     rewardText: 'MOSH DASH! PRESS SHIFT TO DASH, EVEN IN MID-AIR.',
     enemies: ['poser', 'drone', 'drone', 'roadie'],
+  },
+  {
+    name: 'PIXEL PALACE', subtitle: 'INSERT COIN TO CONTINUE', seed: 606, theme: 'arcade',
+    skyTop: hex('#0a0618'), skyBot: hex('#2a0a40'), fog: hex('#1a0a2c'), stars: true, weather: 'neon',
+    light: { sun: norm(-0.2, 0.95, 0.2), sunInt: 0.28, ambient: 0.66, sunColor: hex('#e0d0ff') },
+    gate: 'chasm', gateHint: "THE FLOOR CAVED IN TO THE BASEMENT. YOU'LL NEED A MOSH DASH.", gateHintHave: '',
+    boss: 5, bossName: 'GAME OVER GARY', reward: 'overdrive',
+    bossLines: ['NOBODY BEATS MY HIGH SCORE.', 'I HAVE BEEN ON THIS MACHINE SINCE 1983.', 'GAME OVER, MAN. GAME OVER!'],
+    rewardText: 'OVERDRIVE! POWER CHORDS COST LESS FEEDBACK AND HIT HARDER AND WIDER.',
+    enemies: ['drone', 'poser', 'drone', 'roadie'],
   },
   {
     name: 'THE COLOSSEUM', subtitle: 'RIKKI SPANDEX: LIVE AND LOUD', seed: 404, theme: 'venue',
@@ -109,13 +129,44 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
   const w = new VoxelWorld(WX, WY, WZ);
   const rng = new RNG(seed);
   const ph = (seed % 1000) * 0.37;
-  const wig = def.theme === 'city' ? 6 : 4;
+  const wig = def.theme === 'city' || def.theme === 'skate' ? 6 : 4;
   const pathZ = (x: number) => WZ / 2 + Math.sin(x * 0.045 + ph) * wig + Math.sin(x * 0.11 + ph * 2) * 2;
   const theme = def.theme;
-  const indoor = theme !== 'city';
+  const indoor = theme !== 'city' && theme !== 'skate';
   const cliffUp = def.gate === 'cliff' ? 6 : 0;
   const arenaH = BASE + cliffUp;
   const vents: [number, number, number][] = [];
+
+  // ---------------------------------------------------------------- skate park terrain features
+  type Feat = { k: 'bowl' | 'quarter' | 'pyramid'; x: number; z: number; r: number; s: number };
+  const feats: Feat[] = [];
+  if (theme === 'skate') {
+    for (let x = 28; x < ARX - ARR - 10; x += rng.int(14, 18)) {
+      if (Math.abs(x - GX) < 16) continue;
+      const k = rng.pick(['bowl', 'bowl', 'quarter', 'pyramid'] as const);
+      const s = rng.chance(0.5) ? 1 : -1;
+      if (k === 'bowl') feats.push({ k, x, z: pathZ(x) + s * rng.range(9, 11), r: rng.range(4, 5.5), s });
+      else if (k === 'quarter') feats.push({ k, x, z: 0, r: rng.int(7, 10), s });
+      else feats.push({ k, x, z: pathZ(x), r: 3.5, s });
+    }
+  }
+  const skateH = (x: number, z: number) => {
+    let h = 0;
+    for (const f of feats) {
+      if (f.k === 'bowl') {
+        const d = Math.hypot(x + 0.5 - f.x, z + 0.5 - f.z);
+        if (d < f.r) h = Math.min(h, -Math.min(3, Math.ceil(f.r - d)));
+      } else if (f.k === 'quarter') {
+        if (x < f.x || x >= f.x + f.r) continue;
+        const dz = (z - pathZ(x)) * f.s;
+        if (dz >= 6 && dz < 12) h = Math.max(h, Math.min(4, Math.floor(dz - 5)));
+      } else {
+        const e = Math.min(f.r - Math.abs(x + 0.5 - f.x), f.r - Math.abs(z + 0.5 - f.z));
+        if (e > 0) h = Math.max(h, e > 2 ? 2 : 1);
+      }
+    }
+    return h;
+  };
 
   // ---------------------------------------------------------------- heightmap
   const H = new Int16Array(WX * WZ);
@@ -127,6 +178,7 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
       if (x >= GX && cliffUp) h += cliffUp;
       // concert venue: stepped stadium stands rising away from the floor
       if (theme === 'venue' && x > BLD + 4 && dp > 11) h += Math.min(6, Math.floor((dp - 11) / 1.4));
+      if (theme === 'skate') h += skateH(x, z);
       if (x < BLD) h = BASE;
       if (Math.hypot(x - ARX, z - ARZ) < ARR + 3) h = arenaH;
       H[z * WX + x] = h;
@@ -147,6 +199,16 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
       }
       case 'mall':
         return ((x >> 1) + (z >> 1)) % 2 ? M.TILE : M.TILE2;
+      case 'skate': {
+        const hh = hAt(x, z), ref = BASE + (x >= GX ? cliffUp : 0);
+        if (hh < ref) return hh === ref - 1 ? M.TILE2 : M.POOL; // pool bowls with a tile band
+        if (dp > 15) return M.GRASS;
+        return M.SKATE;
+      }
+      case 'arcade': {
+        const hsh = hash2(x >> 1, z >> 1, 17);
+        return hsh < 0.18 ? M.ACARPET2 : hsh < 0.3 ? M.ACARPET3 : M.ACARPET;
+      }
       case 'venue':
         if (hAt(x, z) > BASE + cliffUp) return Math.floor(Math.abs(z - pathZ(x)) / 1.4) % 2 ? M.SEAT : M.CONCRETE;
         return hash2(x, z, 8) < 0.02 ? M.LINE : M.VFLOOR;
@@ -168,11 +230,12 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
     if (x < BLD + 2) return false;
     return x > 1 && z > 1 && x < WX - 2 && z < WZ - 2;
   };
-  const wallMat = { city: M.BRICK2, video: M.WALLPAPER, mall: M.CONCRETE, venue: M.WALL_DARK }[theme];
+  const wallMat = { city: M.BRICK2, video: M.WALLPAPER, skate: M.CONCRETE, mall: M.CONCRETE, arcade: M.WALL_DARK, venue: M.WALL_DARK }[theme];
 
   function wallStripe(t: Theme, ry: number, x: number): number {
     if (t === 'video') return ry === 2 ? M.WALL_STRIPE : ry === 3 && x % 9 < 2 ? M.TAPE_Y : M.WALLPAPER;
     if (t === 'mall') return ry === 1 ? M.TILE2 : M.CONCRETE;
+    if (t === 'arcade') return ry === 3 ? M.NEON_PURPLE : ry === 5 && x % 6 < 3 ? M.NEON_CYAN : M.WALL_DARK;
     return ry % 4 === 0 ? M.AMPD : M.WALL_DARK;
   }
 
@@ -192,12 +255,12 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
         const ry = y - BASE;
         if (door && ry < 5) continue;
         const win = !door && ry >= 1 && ry <= 3 && z % 6 < 4 && theme !== 'venue';
-        w.set(BLD, y, z, win ? M.GLASS : theme === 'mall' ? M.CONCRETE : theme === 'video' ? M.BRICK3 : M.WALL_DARK);
+        w.set(BLD, y, z, win ? (theme === 'arcade' ? M.NEON_PINK : M.GLASS) : theme === 'mall' ? M.CONCRETE : theme === 'video' ? M.BRICK3 : M.WALL_DARK);
       }
     }
     // marquee sign above the doors
     const sz = Math.round(pathZ(BLD));
-    const signCol = theme === 'video' ? [M.NEON_YELLOW, M.NEON_PINK] : theme === 'mall' ? [M.NEON_CYAN, M.NEON_PURPLE] : [M.NEON_PINK, M.LAMP];
+    const signCol = theme === 'video' ? [M.NEON_YELLOW, M.NEON_PINK] : theme === 'mall' ? [M.NEON_CYAN, M.NEON_PURPLE] : theme === 'arcade' ? [M.NEON_CYAN, M.NEON_YELLOW] : [M.NEON_PINK, M.LAMP];
     w.fill(BLD - 1, BASE + 5, sz - 6, BLD - 1, BASE + 8, sz + 6, (x, y, z) =>
       y === BASE + 5 || y === BASE + 8 || Math.abs(z - sz) === 6 ? signCol[0] : (z + y) % 3 === 0 ? signCol[1] : M.WALL_DARK);
   }
@@ -205,8 +268,141 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
   // ---------------------------------------------------------------- themes
   if (theme === 'city') genCity();
   else if (theme === 'video') genVideo();
+  else if (theme === 'skate') genSkate();
   else if (theme === 'mall') genMall();
+  else if (theme === 'arcade') genArcade();
   else genVenue();
+
+  // graffiti: blobby colour pieces painted over a wall's surface voxels
+  function graffiti(x: number, y: number, z: number, base: number) {
+    const v = hash2(Math.floor(x / 2), Math.floor((y + z) / 2), 31);
+    if (v < 0.35) return base;
+    const g = hash2(Math.floor(x / 4), Math.floor(y / 3) + Math.floor(z / 4) * 7, 32);
+    return [M.GRAF_P, M.GRAF_O, M.GRAF_G, M.TAPE_B, M.TAPE_Y, M.WHITE][Math.floor(g * 6)];
+  }
+
+  function palm(x: number, z: number) {
+    const h = top(x, z), th = rng.int(7, 10);
+    for (let y = 0; y < th; y++) w.set(x + (y > th - 3 ? 1 : 0), h + y, z, M.PALM);
+    const cx = x + 1, cy = h + th;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]])
+      for (let k = 1; k <= 3; k++) w.set(cx + dx * k, cy - (k === 3 ? 1 : 0), z + dz * k, M.PALM_LEAF);
+    w.set(cx, cy, z, M.PALM_LEAF);
+  }
+
+  // ------------------------------------------------ skate park
+  function genSkate() {
+    // coping along bowl rims and quarter-pipe lips
+    for (const f of feats) {
+      if (f.k === 'bowl') {
+        for (let z = Math.floor(f.z - f.r - 2); z <= f.z + f.r + 2; z++)
+          for (let x = Math.floor(f.x - f.r - 2); x <= f.x + f.r + 2; x++) {
+            const d = Math.hypot(x + 0.5 - f.x, z + 0.5 - f.z);
+            if (d >= f.r && d < f.r + 1 && hAt(x, z) === BASE) w.set(x, BASE - 1, z, M.COPING);
+          }
+      } else if (f.k === 'quarter') {
+        for (let x = f.x; x < f.x + f.r; x++) {
+          const z = Math.round(pathZ(x) + f.s * 9);
+          for (let k = 0; k < 3; k++) { const zz = z + f.s * k; if (hAt(x, zz) === BASE + 4) w.set(x, BASE + 3, zz, k === 0 ? M.COPING : M.SKATE); }
+          // graffiti on the back of the ramp
+          for (let y = BASE; y < BASE + 4; y++) w.set(x, y, Math.round(pathZ(x) + f.s * 12), graffiti(x, y, 0, M.CONCRETE));
+        }
+      }
+    }
+    // grind rails and ledges beside the lines
+    for (let i = 0; i < 12; i++) {
+      const x = rng.int(BLD + 6, ARX - ARR - 10), s = rng.chance(0.5) ? 1 : -1;
+      const z = Math.round(pathZ(x) + s * rng.range(4, 5.5));
+      if (!free(x, z, 3.8) || hAt(x, z) !== BASE) continue;
+      if (rng.chance(0.5)) {
+        for (let k = 0; k < 6; k++) if (k % 5 === 0) w.set(x + k, BASE, z, M.METAL);
+        w.fill(x, BASE + 1, z, x + 5, BASE + 1, z, M.COPING);
+      } else {
+        w.fill(x, BASE, z, x + 4, BASE, z, M.CONCRETE);
+        w.fill(x, BASE, z + s, x + 4, BASE, z + s, M.COPING);
+      }
+    }
+    // graffiti walls, palms, lamps, chain-link fence around the park
+    for (let x = BLD + 4; x < WX - 4; x += rng.int(12, 20)) {
+      if (Math.abs(x - GX) < 14 || x > ARX - ARR - 6) continue;
+      const s = rng.chance(0.5) ? 1 : -1, len = rng.int(7, 11);
+      for (let k = 0; k < len; k++) {
+        const z = Math.round(pathZ(x + k) + s * 14);
+        if (z < 2 || z > WZ - 3) continue;
+        for (let y = BASE; y < BASE + 4; y++) w.set(x + k, y, z, graffiti(x + k, y, z, M.CONCRETE));
+        w.set(x + k, BASE + 4, z, M.COPING);
+      }
+    }
+    for (let i = 0; i < 14; i++) {
+      const x = rng.int(BLD + 2, WX - 8), z = rng.chance(0.5) ? rng.int(2, 5) : rng.int(WZ - 6, WZ - 3);
+      if (!free(x, z, 6)) continue;
+      palm(x, z);
+    }
+    for (let x = 4; x < WX - 2; x++) for (const z of [1, WZ - 2]) if (Math.abs(x - GX) > 9) w.fill(x, hAt(x, z), z, x, hAt(x, z) + 2, z, M.FENCE);
+    for (let x = 24; x < ARX - ARR - 6; x += 13) {
+      if (Math.abs(x - GX) < 12) continue;
+      const z = Math.round(pathZ(x) + (x % 2 ? 6.5 : -6.5));
+      if (!free(x, z, 6)) continue;
+      const h = top(x, z);
+      w.fill(x, h, z, x, h + 4, z, M.METAL);
+      w.set(x, h + 5, z, M.LAMP);
+    }
+  }
+
+  // ------------------------------------------------ arcade
+  function genArcade() {
+    const cabCols = [M.ARCADE, M.ARCADE2, M.ARCADE3];
+    const neons = [M.NEON_PINK, M.NEON_CYAN, M.NEON_YELLOW, M.NEON_PURPLE];
+    let x = BLD + 6;
+    while (x < ARX - ARR - 6) {
+      if (Math.abs(x - GX) < 12) { x++; continue; }
+      const pz = pathZ(x);
+      const kind = rng.next();
+      for (const s of [-1, 1]) {
+        const from = Math.round(pz + s * 4.5), to = s > 0 ? WZ - 3 : 2;
+        const gapAt = rng.int(Math.min(from, to) + 2, Math.max(from, to) - 3);
+        if (kind < 0.62) {
+          // back-to-back rows of upright cabinets
+          for (let z = from; s > 0 ? z <= to : z >= to; z += s) {
+            if (Math.abs(z - gapAt) <= 1) continue;
+            const h = hAt(x, z);
+            const cc = cabCols[Math.floor(hash2(x, z, 41) * 3)], mq = neons[Math.floor(hash2(x, z, 42) * 4)];
+            w.fill(x, h, z, x + 1, h + 4, z, cc);
+            w.set(x, h + 2, z, M.CRT).set(x + 1, h + 2, z, M.CRT);
+            w.set(x - 1, h + 1, z, M.PLASTIC).set(x + 2, h + 1, z, M.PLASTIC);
+            if ((z & 1) === 0) w.set(x - 1, h + 1, z, M.RED).set(x + 2, h + 1, z, M.RED);
+            w.set(x, h + 3, z, mq).set(x + 1, h + 3, z, mq);
+          }
+        } else if (kind < 0.82) {
+          // pinball tables: glass tops, light-up backboxes
+          for (let z = from; s > 0 ? z <= to - 1 : z >= to + 1; z += s * 3) {
+            const h = hAt(x, z);
+            w.fill(x - 1, h, z, x + 1, h, z, cabCols[Math.floor(hash2(x, z, 43) * 3)]);
+            w.fill(x - 1, h + 1, z, x + 1, h + 1, z, M.GLASS);
+            w.fill(x + 2, h, z, x + 2, h + 2, z, M.ARCADE);
+            w.set(x + 2, h + 3, z, neons[Math.floor(hash2(x, z, 44) * 4)]);
+          }
+        } else {
+          // a dance machine: light-up arrow pads on the floor and a big screen
+          const cz = Math.round(pz + s * 8);
+          for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++)
+            w.set(x + dx, BASE - 1, cz + dz, (dx === 0) !== (dz === 0) ? neons[(dx + 1) + (dz + 1)] : M.METAL);
+          w.fill(x - 1, BASE, cz + s * 2, x + 1, BASE + 3, cz + s * 2, M.ARCADE);
+          w.fill(x - 1, BASE + 2, cz + s * 2, x + 1, BASE + 3, cz + s * 2, M.CRT);
+          w.fill(x - 1, BASE + 4, cz + s * 2, x + 1, BASE + 4, cz + s * 2, M.NEON_PINK);
+        }
+      }
+      x += rng.int(6, 8);
+    }
+    // prize counter by the door: glass case full of prizes, tickets wall behind
+    const cz = Math.round(pathZ(BLD + 5) - 7);
+    w.fill(BLD + 3, BASE, cz - 1, BLD + 10, BASE, cz, M.ARCADE2);
+    w.fill(BLD + 3, BASE + 1, cz - 1, BLD + 10, BASE + 1, cz, (xx, y, zz) => [M.RED, M.TAPE_Y, M.TAPE_B, M.GRAF_P, M.GRAF_G][Math.floor(hash2(xx, zz, 45) * 5)]);
+    w.fill(BLD + 3, BASE + 2, cz - 1, BLD + 10, BASE + 2, cz, M.GLASS);
+    // change machine
+    w.fill(BLD + 2, BASE, cz + 3, BLD + 2, BASE + 2, cz + 3, M.METAL);
+    w.set(BLD + 2, BASE + 2, cz + 3, M.NEON_YELLOW);
+  }
 
   function genCity() {
     for (const side of [-1, 1]) {
@@ -458,7 +654,7 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
       for (let y = h; y < Math.min(WY, hh); y++) {
         const ry = y - h;
         const win = (theme === 'city' || theme === 'mall') && ry % 3 === 1 && (x + z) % 3 === 1 && y < hh - 2;
-        w.set(x, y, z, win ? (theme === 'mall' ? M.GLASS : M.WINDOW) : theme === 'video' ? wallStripe('video', ry, x) : wallMat);
+        w.set(x, y, z, win ? (theme === 'mall' ? M.GLASS : M.WINDOW) : theme === 'video' ? wallStripe('video', ry, x) : theme === 'arcade' ? wallStripe('arcade', ry, x) : theme === 'skate' ? graffiti(x, y, z, M.CONCRETE) : wallMat);
       }
     }
   }
@@ -497,11 +693,13 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
         if (theme === 'city') m = x % 5 === 0 && Math.abs(z - ARZ) < 6 ? M.LINE : M.ASPHALT;
         else if (theme === 'video') m = d < 4 ? M.CARPET3 : (x + z) % 4 === 0 ? M.CARPET2 : M.CARPET;
         else if (theme === 'mall') m = ((x >> 1) + (z >> 1)) % 2 ? M.TILE : M.NEON_PURPLE;
+        else if (theme === 'skate') m = d > ARR - 1.5 ? M.COPING : d < 3 ? M.TILE2 : M.POOL;
+        else if (theme === 'arcade') m = ((x >> 1) + (z >> 1)) % 2 ? M.ACARPET : (x + z) % 4 === 0 ? M.NEON_CYAN : M.ACARPET2;
         else m = M.STAGE;
         w.set(x, arenaH - 1, z, m);
         for (let y = arenaH; y < WY; y++) w.set(x, y, z, 0);
       } else if (d < ARR + 1.2 && x > ARX - ARR + 2) {
-        const fm = theme === 'video' ? M.SHELF : M.FENCE;
+        const fm = theme === 'video' ? M.SHELF : theme === 'arcade' ? M.NEON_PURPLE : M.FENCE;
         for (let y = arenaH; y < arenaH + 3; y++) w.set(x, y, z, fm);
       }
     }
@@ -513,6 +711,11 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
     w.fill(dx - 2, arenaH, dz - 2, dx + 2, arenaH, dz + 2, M.STAGE);
     w.fill(dx - 1, arenaH + 1, dz - 1, dx + 1, arenaH + 2, dz + 1, (x, y, z) => (x === dx && z === dz ? M.WHITE : M.RED));
     w.set(dx + 2, arenaH + 1, dz + 2, M.METAL).set(dx + 2, arenaH + 2, dz + 2, M.TAPE_Y);
+  }
+  if (theme === 'arcade') {
+    // the high-score screen: a wall of CRTs behind the arena
+    for (let z = ARZ - 10; z <= ARZ + 10; z++)
+      for (let y = arenaH; y < arenaH + 9; y++) w.set(WX - 3, y, z, (y - arenaH) % 3 === 0 || (z - ARZ) % 4 === 0 ? M.WALL_DARK : M.CRT);
   }
   if (theme === 'video') {
     // "RETURNS" neon over the back room
@@ -540,6 +743,7 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
   // ---------------------------------------------------------------- secrets
   const collectibles: Collectible[] = [];
   const closetWall = theme === 'city' ? M.BRICK2 : theme === 'venue' ? M.CONCRETE : wallMat;
+  const closetPaint = (x: number, y: number, z: number) => (theme === 'skate' ? graffiti(x, y, z, closetWall) : theme === 'arcade' ? wallStripe('arcade', y - BASE, x + z) : closetWall);
   // a closet sealed by a breakable wall (needs POWER CHORD)
   {
     const hx = rng.int(36, 52), pz = Math.round(pathZ(hx));
@@ -553,7 +757,7 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
       const edge = x === hx - 1 || x === hx + 5 || z === hz - 1 || z === hz + 5 || y === h + 5;
       if (!edge) return 0;
       if (z === doorZ && x >= hx + 1 && x <= hx + 3 && y < h + 4) return brk(x, y, z, false);
-      return closetWall;
+      return closetPaint(x, y, z);
     });
     // clear walkway between the route and the closet door
     const z0 = s > 0 ? pz : hz + 6, z1 = s > 0 ? hz - 2 : pz;
@@ -572,7 +776,9 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
     w.fill(px - 4, h, pz - 4, px + 4, WY - 1, pz + 4, 0);
     w.fill(px - 4, 0, pz - 4, px + 4, h - 1, pz + 4, (x, y, z) => (y === h - 1 ? floorMat(x, z) : sub));
     w.fill(px - 1, h, pz - 1, px + 1, h + 5, pz + 1, (x, y, z) => {
-      if (y === h + 5) return theme === 'video' ? M.SHELF : theme === 'mall' ? M.NEON_CYAN : M.ROOF;
+      if (y === h + 5) return theme === 'video' ? M.SHELF : theme === 'mall' || theme === 'arcade' ? M.NEON_CYAN : theme === 'skate' ? M.COPING : M.ROOF;
+      if (theme === 'arcade') return y === h + 4 ? M.CRT : M.ARCADE2;
+      if (theme === 'skate') return graffiti(x, y, z, M.CONCRETE);
       if (theme === 'video') return TAPES[Math.floor(hash2(x, y * 13 + z, 4) * TAPES.length)];
       if (theme === 'venue') return (y + z) % 3 === 0 ? M.AMPD : M.GRILLED;
       return closetWall;

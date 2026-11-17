@@ -1,14 +1,14 @@
 // Game state, gameplay, AI and HUD.
 import { Renderer, W, H, FLAG_XRAY, FLAG_SHADOW, FLAG_FLASH } from './renderer';
 import { Input } from './input';
-import { Audio, SONGS } from './audio';
+import { Audio, SONGS, BOSS_SONG } from './audio';
 import { CameraRig } from './camera';
 import { VoxelWorld, VoxelModel, MATS, PartBuilder, makeModel, Chunk } from './voxels';
 import { WORLDS, WorldDef, generateWorld, GenResult, Ability, EnemyKind } from './worlds';
 import { Actor, drawModel } from './entities';
 import {
   heroModel, poserModel, roadieModel, droneModel, bossModel, pickModel, noteModel, tapeModel, pouchModel,
-  heartModel, micStandModel, poseHumanoid, textModel,
+  heartModel, micStandModel, poseHumanoid, textModel, ItemKind,
 } from './models';
 import { clamp, lerp, angleLerp, hex, mix, mIdent, mRotX, mRotY, mRotZ, mPivot, mChain, mTrans, mScale, wrapAngle, TAU } from './math';
 
@@ -54,10 +54,13 @@ const BOSS_PATTERNS: BossAttack[][] = [
   ['slam', 'charge', 'slam', 'spread'],
   ['ring', 'teleport', 'spread', 'summon', 'ring', 'teleport'],
   ['spread', 'charge', 'slam', 'ring', 'summon', 'slam'],
+  ['charge', 'slam', 'charge', 'spread', 'slam'],
+  ['ring', 'summon', 'spread', 'teleport', 'ring', 'spread'],
 ];
-const BOSS_HP = [40, 52, 58, 90];
-const BOSS_SCALE = [1.55, 2.2, 1.6, 1.9];
-const BOSS_PROJ = ['#f4f4f4', '#ff8a20', '#3af0ff', '#ff3aa8'];
+const BOSS_HP = [40, 52, 58, 90, 48, 62];
+const BOSS_SCALE = [1.55, 2.2, 1.6, 1.9, 1.6, 1.7];
+const BOSS_PROJ = ['#f4f4f4', '#ff8a20', '#3af0ff', '#ff3aa8', '#a0ff40', '#ffe23a'];
+const BOSS_ITEM: ItemKind[] = ['briefcase', 'vguitar', 'keytar', 'vguitar', 'skateboard', 'joystick'];
 
 class Enemy extends Actor {
   kind: EnemyKind | 'boss' = 'poser';
@@ -138,7 +141,7 @@ export class Game {
     posers: [poserModel(0), poserModel(1), poserModel(2)],
     roadie: roadieModel(),
     drone: droneModel(),
-    bosses: [bossModel(0), bossModel(1), bossModel(2), bossModel(3)],
+    bosses: [bossModel(0), bossModel(1), bossModel(2), bossModel(3), bossModel(4), bossModel(5)],
     pick: pickModel(),
     notes: BOSS_PROJ.map((c) => noteModel(c)),
     droneNote: noteModel('#b45aff'),
@@ -234,7 +237,7 @@ export class Game {
     for (const s of this.gen.spawns) this.enemies.push(this.makeEnemy(s.kind, s.x, s.y, s.z));
     if (!this.save.beaten.includes(this.idx)) {
       const [ax, ay, az] = this.gen.arena;
-      const b = new Enemy(this.m.bosses[this.def.boss], WORLDS[this.idx].boss === 2 ? 'keytar' : this.def.boss === 0 ? 'briefcase' : 'vguitar');
+      const b = new Enemy(this.m.bosses[this.def.boss], BOSS_ITEM[this.def.boss]);
       b.kind = 'boss';
       b.boss = this.def.boss;
       b.scale = BOSS_SCALE[b.boss];
@@ -494,7 +497,7 @@ export class Game {
       if (p.picks > 0) this.startAct('throw', 0.25);
     } else if (!busy && inp.pressed('KeyL', 'KeyR')) {
       if (!this.has('chord')) this.msg("YOU DON'T KNOW THAT CHORD YET", 1.5);
-      else if (p.feedback < 40) this.msg('NEED MORE FEEDBACK!', 1.2, hex('#ffe23a'));
+      else if (p.feedback < this.chordCost()) this.msg('NEED MORE FEEDBACK!', 1.2, hex('#ffe23a'));
       else {
         this.startAct('chord', 1.0);
         // cinematic hero shot: swoop to a low 3/4 front view in slow motion
@@ -674,28 +677,35 @@ export class Game {
       dx = tx / l; dy = ty / l; dz = tz / l;
     }
     const sp = 26;
-    this.projectiles.push({ x: p.x + dx * 0.6, y: sy, z: p.z + dz * 0.6, vx: dx * sp, vy: dy * sp, vz: dz * sp, life: 0.9, dmg: 1, friendly: true, model: this.m.pick, spin: 0, r: 0.3 });
+    const fan = this.has('spread') ? [-0.22, 0, 0.22] : [0];
+    for (const a of fan) {
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const fx = dx * ca + dz * sa, fz = -dx * sa + dz * ca;
+      this.projectiles.push({ x: p.x + fx * 0.6, y: sy, z: p.z + fz * 0.6, vx: fx * sp, vy: dy * sp, vz: fz * sp, life: 0.9, dmg: 1, friendly: true, model: this.m.pick, spin: 0, r: 0.3 });
+    }
   }
 
   doChord() {
     const p = this.player;
-    p.feedback -= 40;
+    p.feedback -= this.chordCost();
+    const od = this.has('overdrive');
+    const RAD = od ? 9 : 7;
     this.audio.powerChord();
     this.cam.shake = 1.6;
     this.flash = 0.45;
     const cx = p.x, cy = p.y + 1.2, cz = p.z;
-    this.waves.push({ x: cx, y: p.y + 0.3, z: cz, r: 0.5, maxR: 7, speed: 22, friendly: true, hit: false, col: hex('#ffe23a') });
+    this.waves.push({ x: cx, y: p.y + 0.3, z: cz, r: 0.5, maxR: RAD, speed: 22, friendly: true, hit: false, col: hex('#ffe23a') });
     this.waves.push({ x: cx, y: p.y + 1.6, z: cz, r: 0.2, maxR: 6, speed: 16, friendly: true, hit: false, col: hex('#ff3aa8') });
     for (const e of this.enemies) {
       if (e.kind === 'boss' && !this.bossActive) continue;
       const d = Math.hypot(e.x - cx, e.z - cz);
-      if (d < 7 + e.r && Math.abs(e.y - p.y) < 5) this.damageEnemy(e, 4, (e.x - cx) / (d || 1), (e.z - cz) / (d || 1), 16);
+      if (d < RAD + e.r && Math.abs(e.y - p.y) < 5) this.damageEnemy(e, od ? 6 : 4, (e.x - cx) / (d || 1), (e.z - cz) / (d || 1), 16);
     }
     this.projectiles = this.projectiles.filter((pr) => pr.friendly || Math.hypot(pr.x - cx, pr.z - cz) > 7);
     // break amp walls
     const w = this.world;
     let broke = 0;
-    const R = 5.5;
+    const R = od ? 6.5 : 5.5;
     for (let y = Math.floor(cy - R); y <= cy + R; y++)
       for (let z = Math.floor(cz - R); z <= cz + R; z++)
         for (let x = Math.floor(cx - R); x <= cx + R; x++) {
@@ -712,6 +722,10 @@ export class Game {
       this.audio.sfx('break');
       this.msg('KRRRANG! THE WALL CRUMBLES!', 2, hex('#ffe23a'));
     }
+  }
+
+  chordCost() {
+    return this.has('overdrive') ? 30 : 40;
   }
 
   hurtPlayer(dmg: number, fromX: number, fromZ: number, noKnock = false) {
@@ -918,7 +932,7 @@ export class Game {
         e.timer = 1.5;
         this.dialog = {
           name: this.def.bossName, lines: this.def.bossLines, i: 0, t: 0,
-          done: () => { this.cam.endCinematic(); this.audio.playSong({ ...SONGS[3], bpm: 140 + this.idx * 6 }); },
+          done: () => { this.cam.endCinematic(); this.audio.playSong({ ...BOSS_SONG, bpm: 138 + this.idx * 4 }); },
         };
         // "versus" shot over the player's shoulder at the boss
         this.cam.startCinematic(Math.atan2(e.x - p.x, e.z - p.z) + 0.45, 999, [e.x, e.y + e.h * 0.35, e.z], 7 + e.scale * 3, 0.2);
@@ -1018,7 +1032,7 @@ export class Game {
             for (let i = 0; i < 2; i++) {
               const a = Math.random() * TAU;
               const sx = ax + Math.cos(a) * 7, sz = az + Math.sin(a) * 7;
-              const kind: EnemyKind = e.boss === 2 ? 'drone' : 'poser';
+              const kind: EnemyKind = e.boss === 2 || e.boss === 5 ? 'drone' : 'poser';
               const m = this.makeEnemy(kind, sx, kind === 'drone' ? ay + 4 : ay + 0.1, sz);
               m.aggro = true;
               this.enemies.push(m);
@@ -1396,7 +1410,7 @@ export class Game {
     // abilities row
     let ax = 6;
     const abY = this.has('chord') ? 41 : 26;
-    for (const [a, lbl] of [['chord', 'L:CHORD'], ['dive', '2XJUMP'], ['dash', 'SHIFT:DASH']] as [Ability, string][]) {
+    for (const [a, lbl] of [['chord', 'L:CHORD'], ['dive', '2XJUMP'], ['dash', 'SHIFT:DASH'], ['spread', '3XPICK'], ['overdrive', 'OVERDRIVE']] as [Ability, string][]) {
       if (!this.has(a)) continue;
       r.text(lbl, ax, abY, hex('#9a9aa8'));
       ax += r.textWidth(lbl) + 6;
@@ -1404,7 +1418,7 @@ export class Game {
     // world name
     const wn = `${this.idx + 1}. ${this.def.name}`;
     r.text(wn, W - r.textWidth(wn) - 6, 6, hex('#ffe23a'));
-    const col = `TAPES ${this.save.collected.filter((c) => c.endsWith('tape')).length}/4  POUCHES ${this.save.collected.filter((c) => c.endsWith('pouch')).length}/4`;
+    const col = `TAPES ${this.save.collected.filter((c) => c.endsWith('tape')).length}/${WORLDS.length}  POUCHES ${this.save.collected.filter((c) => c.endsWith('pouch')).length}/${WORLDS.length}`;
     r.text(col, W - r.textWidth(col) - 6, 14, hex('#a0a0b0'));
     // camera mode
     if (this.showFps) r.text(`${Math.round(this.fps)} FPS  ${r.stats.faces} F`, 6, H - 10, hex('#80ff80'));
@@ -1504,10 +1518,10 @@ export class Game {
     r.rect(40, 30, W - 80, 1, hex('#ffe23a'));
     r.textCentered('TOUR VAN - PICK YOUR NEXT GIG', 38, hex('#ffe23a'));
     WORLDS.forEach((wd, i) => {
-      const y = 58 + i * 22;
+      const y = 50 + i * 19;
       const unlocked = i <= this.save.unlocked;
       const sel = i === this.mapSel;
-      if (sel) r.rect(48, y - 3, W - 96, 19, hex('#3a1a3a'));
+      if (sel) r.rect(48, y - 2, W - 96, 17, hex('#3a1a3a'));
       const name = unlocked ? `${i + 1}. ${wd.name}` : `${i + 1}. ???`;
       r.text((sel ? '> ' : '  ') + name, 54, y, unlocked ? 0xffffffff : hex('#606060'));
       if (unlocked) {
@@ -1545,7 +1559,7 @@ export class Game {
     r.textCentered('THE FLANNEL REVOLUTION BEGINS.', 92, 0xffffffff);
     const tapes = this.save.collected.filter((c) => c.endsWith('tape')).length;
     const pouches = this.save.collected.filter((c) => c.endsWith('pouch')).length;
-    r.textCentered(`MIXTAPES ${tapes}/4   PICK POUCHES ${pouches}/4`, 112, hex('#ff3aa8'));
+    r.textCentered(`MIXTAPES ${tapes}/${WORLDS.length}   PICK POUCHES ${pouches}/${WORLDS.length}`, 112, hex('#ff3aa8'));
     if (this.victoryT > 3 && Math.floor(this.time * 2) % 2) r.textCentered('PRESS ENTER', 140, hex('#a0a0b0'));
   }
 }

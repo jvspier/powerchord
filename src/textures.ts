@@ -58,6 +58,16 @@ const T: Record<string, Texture> = {
   panel: make(12, 12, (x, y) => (x === 0 || y === 0 ? 2 : x === 1 || y === 1 ? 5 : 4)),
   van: make(6, 6, (_x, y) => (y === 0 ? 5 : 4)),
   smooth: make(6, 6, () => 4),
+  // arcade carpet: dark base with bright cosmic squiggles and stars
+  cosmic: make(12, 12, (x, y) => {
+    if ((x === 2 && y === 9) || (x === 8 && y === 3)) return 7;
+    if ((x + y * 2) % 11 === 0 && y % 4 < 2) return 7;
+    if ((x * 3 + y) % 13 === 0) return 6;
+    return n(x, y, 13) < 0.1 ? 5 : 4;
+  }),
+  grass: make(6, 6, (x, y) => { const h = n(x, y, 14); return h < 0.2 ? 3 : h > 0.8 ? 6 : (x + y) % 3 === 0 ? 5 : 4; }),
+  pool: make(12, 12, (x, y) => (x === 0 || y === 0 ? 3 : n(x, y, 15) < 0.04 ? 5 : 4)),
+  cabinet: make(6, 6, (x, y) => (x === 0 || x === 5 ? 3 : y === 2 && x > 0 && x < 5 ? 6 : 4)),
   leaf: make(12, 12, (x, y) => {
     // clustered leaf blobs: bright tips, dark gaps
     const h = n(x >> 1, y >> 1, 11), k = n(x, y, 12);
@@ -83,7 +93,10 @@ const MAP: Record<string, [string, string]> = {
   tape_g: ['tapes', 'smooth'], tape_w: ['tapes', 'smooth'], plastic: ['van', 'smooth'], crt: ['crt', 'crt'],
   tv_case: ['metal', 'metal'], tv_screen: ['tvstatic', 'tvstatic'], wallpaper: ['wallpaper', 'slab'],
   wall_stripe: ['stripe', 'slab'], wall_dark: ['panel', 'panel'], seat: ['seat', 'smooth'], venue_floor: ['slab', 'slab'],
-  pyro: ['neon', 'neon'], palm_leaf: ['leaf', 'leaf'], plant: ['leaf', 'leaf'], leaves: ['leaf', 'leaf'], pine: ['leaf', 'leaf'], pine2: ['leaf', 'leaf'], spot_w: ['neon', 'neon'], arcade: ['metal', 'metal'], line: ['asphalt', 'asphalt'],
+  arcade2: ['cabinet', 'metal'], arcade3: ['cabinet', 'metal'], acarpet: ['cosmic', 'cosmic'], acarpet2: ['cosmic', 'cosmic'],
+  acarpet3: ['cosmic', 'cosmic'], skate: ['slab', 'slab'], pool: ['pool', 'pool'], coping: ['metal', 'metal'],
+  graf_p: ['plain', 'plain'], graf_o: ['plain', 'plain'], graf_g: ['plain', 'plain'], grass: ['grass', 'grass'],
+  pyro: ['neon', 'neon'], palm_leaf: ['leaf', 'leaf'], plant: ['leaf', 'leaf'], leaves: ['leaf', 'leaf'], pine: ['leaf', 'leaf'], pine2: ['leaf', 'leaf'], spot_w: ['neon', 'neon'], arcade: ['cabinet', 'metal'], line: ['asphalt', 'asphalt'],
 };
 
 /** Texture table indexed by id (0 = untextured). */

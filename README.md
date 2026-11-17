@@ -32,7 +32,7 @@ npm run build    # type-check + production build into dist/
 
 ## The tour
 
-Four 90s locations, each procedurally generated around a clear theme. The layout is
+Six 90s locations, each procedurally generated around a clear theme. The layout is
 re-rolled for every new game (the seed is stored in your save so backtracking stays consistent).
 
 1. **Rain City** — rainy downtown streets, brick buildings, parked cars, payphones.
@@ -40,10 +40,16 @@ re-rolled for every new game (the seed is stored in your save so backtracking st
 2. **Rewind Video** — a VHS rental store: carpet, aisles of tape shelves with neon genre signs,
    TV walls full of static, posters, the checkout counter. Blocked by a wall of TVs only a power chord
    can blow out. Boss: Late Fee Larry → learn **Stage Dive** (double jump)
-3. **Galleria Mall** — checkerboard concourse, storefronts (arcades, record stores, clothes, toys),
+3. **Shred Park** — a sunset skate park: pool bowls with coping, quarter pipes, fun-box pyramids,
+   grind rails, ledges, graffiti walls, palms and a chain-link fence. The vert ramp is too tall without a
+   stage dive. Boss: Rad Chad → **Triple Pick** (picks fan out three at a time)
+4. **Galleria Mall** — checkerboard concourse, storefronts (arcades, record stores, clothes, toys),
    palm planters, kiosks, a fountain and a food court. The escalator is busted, so you'll need to
    stage-dive to the upper level. Boss: DJ Synthax → learn **Mosh Dash**
-4. **The Colosseum** — the concert venue: stadium stands, lighting trusses, speaker stacks, crowd
+5. **Pixel Palace** — an arcade: cosmic carpet, back-to-back rows of cabinets with glowing
+   marquees, pinball tables, a dance machine and the prize counter. The floor has caved in, so dash
+   across. Boss: Game Over Gary → **Overdrive** (cheaper, bigger, harder power chords)
+6. **The Colosseum** — the concert venue: stadium stands, lighting trusses, speaker stacks, crowd
    barriers and pyro vents. Dash across the mosh pit to reach the main stage and face Rikki Spandex.
 
 Every world also hides a **mixtape** (+1 max health) sealed in a closet behind a breakable wall,

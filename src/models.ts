@@ -5,7 +5,7 @@ import { FONT } from './font';
 
 type ColFn = (x: number, y: number, z: number) => number;
 export type HairStyle = 'grunge' | 'teased' | 'mullet' | 'slick' | 'cap' | 'visor';
-export type ItemKind = 'guitar' | 'vguitar' | 'keytar' | 'briefcase' | 'none';
+export type ItemKind = 'guitar' | 'vguitar' | 'keytar' | 'briefcase' | 'skateboard' | 'joystick' | 'none';
 
 export interface HumanoidCfg {
   skin: string;
@@ -59,6 +59,20 @@ function buildItem(kind: ItemKind, color: string): PartBuilder {
     for (let x = -5; x <= 3; x++) b.set(x, 1, 0, x % 2 === 0 ? black : white).set(x, 1, 1, white);
     for (let x = 5; x <= 9; x++) b.set(x, 0, 0, black);
     b.set(9, 1, 0, red).set(-6, 0, 2, red);
+  } else if (kind === 'skateboard') {
+    // carried vertically: deck along y, griptape on one face, wheels at the ends
+    const grip = C('#202020'), wheel = C('#f4f0a0'), truck = C('#b0b4bc');
+    b.box(-1, -7, 0, 0, 2, 0, body);
+    b.box(-1, -6, -1, 0, 1, -1, grip);
+    for (const y of [-6, 1]) { b.set(-1, y, 1, truck).set(0, y, 1, truck).set(-2, y, 1, wheel).set(1, y, 1, wheel); }
+    b.set(-1, -4, 0, C('#ffe23a')).set(0, -3, 0, C('#ffe23a'));
+  } else if (kind === 'joystick') {
+    // a giant arcade stick
+    b.box(-3, -3, -1, 2, -1, 1, C('#1a1a1e'));
+    b.box(-3, -1, -1, 2, -1, 1, body);
+    b.box(-1, 0, 0, -1, 3, 0, C('#c0c0c8'));
+    b.box(-2, 4, -1, 0, 5, 1, C('#e0202a'));
+    b.set(1, 0, 1, C('#3af0ff')).set(1, 0, -1, C('#ffe23a'));
   } else if (kind === 'briefcase') {
     const gold = C('#e0c050'), dark = C('#3a2414');
     b.box(-2, -3, 0, 2, 0, 1, body);
@@ -251,6 +265,29 @@ export function bossModel(kind: number): VoxelModel {
         },
         1 / 6,
       );
+    case 4: // Rad Chad: neon windbreaker skate poser with a deck
+      return buildHumanoid(
+        {
+          skin: '#f0c098', shoe: '#ffffff', sole: '#ff3aa8',
+          pants: (x, y, z) => ((x + y * 2 + z) % 5 < 2 ? C('#3af0ff') : C('#2a2a48')),
+          top: (x, y, z) => (y >= 11 ? C('#ff3aa8') : y >= 9 ? C('#3ad0c0') : C('#7a3ad0')),
+          sleeve: (x, y) => (y >= 11 ? C('#ff3aa8') : C('#3ad0c0')),
+          hair: ['#f8e070', '#e0b040'], hairStyle: 'teased', headband: '#5ad04a', glasses: 'dark',
+          item: 'skateboard', itemColor: '#ff5a2a', wide: true,
+        },
+        1 / 6,
+      );
+    case 5: // Game Over Gary: reigning high-score champ with a giant arcade stick
+      return buildHumanoid(
+        {
+          skin: '#e8b898', shoe: '#1a1a1a', sole: '#3af0ff', pants: () => C('#202028'),
+          top: (x, y, z) => (z === 1 && y === 10 ? C('#3af0ff') : y === 12 ? C('#ff3aa8') : C('#141418')),
+          sleeve: (x, y) => (y === 10 ? C('#3af0ff') : C('#141418')),
+          hair: ['#2a1a2a', '#4a2a3a'], hairStyle: 'teased', headband: '#ff2a3a', glasses: 'visor',
+          item: 'joystick', itemColor: '#f4f2ea', wide: true,
+        },
+        1 / 6,
+      );
     default: // Rikki Spandex: the final boss
       return buildHumanoid(
         {
@@ -374,7 +411,7 @@ export function poseHumanoid(a: AnimState): Mat[] {
   out[3] = mMul(upper, mPivot(-4, 12.5, 0, armL, 0, armLz));
   out[4] = mMul(upper, mPivot(4, 12.5, 0, armR + strum, 0, armRz));
   out[5] = mMul(upper, mPivot(0, 13, 0.5, headRx));
-  if (a.item === 'briefcase') {
+  if (a.item === 'briefcase' || a.item === 'skateboard' || a.item === 'joystick') {
     out[6] = mMul(out[4], mTrans(4, 6, 0));
   } else if (playing) {
     const rest = mChain(mTrans(-0.5, 9.5, 2.6), mRotZ(0.4), mRotY(0.15));

@@ -182,6 +182,10 @@ export class Audio {
       }
       if (s.snare[i % s.snare.length] === 'x') this.noise(t, 0.12, 0.35, g, 1200);
       if (s.hat[i % s.hat.length] === 'x') this.noise(t, 0.03, 0.12, g, 7000);
+      if (s.lead) {
+        const l = s.lead[i % s.lead.length];
+        if (l > 0) this.osc('square', 41.2 * 8 * Math.pow(2, (l - 1) / 12), t, stepDur * 0.9, 0.06, g);
+      }
       const n = s.bass[i % s.bass.length];
       if (n > 0) {
         const f = 41.2 * Math.pow(2, (n - 1) / 12);
@@ -200,15 +204,27 @@ export interface Song {
   snare: string;
   hat: string;
   bass: number[]; // semitones above low E (1 = E1), 0 = rest
+  lead?: number[]; // optional chiptune lead, same note scale (3 octaves up)
 }
 
+const BOSS_METAL: Song = { bpm: 150, kick: 'x.x.x.x.x.x.x.x.', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', bass: [1, 1, 1, 1, 2, 1, 1, 1, 4, 1, 1, 1, 2, 1, 7, 6, 1, 1, 1, 1, 2, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 1] };
+export const BOSS_SONG = BOSS_METAL;
+
+/** One song per world, in tour order. */
 export const SONGS: Song[] = [
   // Rain City: mid-tempo grunge in E
   { bpm: 112, kick: 'x...x.....x.x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', bass: [1, 0, 1, 0, 1, 1, 4, 0, 6, 0, 6, 0, 4, 4, 1, 0, 1, 0, 1, 0, 1, 1, 9, 0, 8, 0, 6, 0, 4, 0, 4, 0] },
-  // Evergreen Woods: slow sludge
+  // Rewind Video: slow sludge
   { bpm: 90, kick: 'x.......x.x.....', snare: '....x.......x...', hat: 'x...x...x...x...', bass: [1, 0, 0, 0, 1, 0, 2, 0, 1, 0, 0, 0, 11, 0, 9, 0, 1, 0, 0, 0, 1, 0, 2, 0, 4, 0, 0, 0, 2, 0, 1, 0] },
-  // Sunset Strip: glam shuffle
+  // Skate park: fast skate punk
+  { bpm: 172, kick: 'x...x...x...x...', snare: '..x...x...x...x.', hat: 'x.x.x.x.x.x.x.x.', bass: [1, 1, 1, 1, 6, 6, 6, 6, 4, 4, 4, 4, 9, 9, 8, 8, 1, 1, 1, 1, 6, 6, 6, 6, 11, 11, 9, 9, 8, 8, 6, 6] },
+  // Galleria Mall: glam shuffle
   { bpm: 128, kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'xxxxxxxxxxxxxxxx', bass: [6, 6, 6, 6, 6, 6, 9, 9, 11, 11, 11, 11, 9, 9, 6, 6, 4, 4, 4, 4, 4, 4, 6, 6, 9, 9, 9, 9, 6, 6, 4, 4] },
-  // Arena of Excess: fast boss metal
-  { bpm: 150, kick: 'x.x.x.x.x.x.x.x.', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', bass: [1, 1, 1, 1, 2, 1, 1, 1, 4, 1, 1, 1, 2, 1, 7, 6, 1, 1, 1, 1, 2, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 1] },
+  // Arcade: chiptune
+  {
+    bpm: 140, kick: 'x.....x...x.....', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', bass: [1, 0, 13, 0, 1, 0, 13, 0, 9, 0, 21, 0, 11, 0, 23, 0, 6, 0, 18, 0, 6, 0, 18, 0, 8, 0, 20, 0, 11, 0, 23, 0],
+    lead: [13, 17, 20, 25, 20, 17, 13, 17, 21, 25, 28, 25, 23, 20, 16, 20, 18, 22, 25, 30, 25, 22, 18, 22, 20, 23, 27, 32, 27, 23, 20, 0],
+  },
+  // The Colosseum
+  BOSS_METAL,
 ];
