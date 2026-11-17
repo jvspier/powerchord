@@ -27,7 +27,7 @@ export class CameraRig {
   tpsFov = 62 * (Math.PI / 180);
 
   // outputs
-  px = 0; py = 0; pz = 0; pitch = 0; fov = 1; dist = 1; s = 0;
+  px = 0; py = 0; pz = 0; pitch = 0; fov = 1; dist = 1; s = 0; nearClip = 0.08;
 
   toggle() {
     this.mode = this.mode === 0 ? 1 : 0;
@@ -100,26 +100,10 @@ export class CameraRig {
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const fxv = Math.sin(this.yaw) * cp, fyv = -sp, fzv = Math.cos(this.yaw) * cp;
 
-    // camera collision, blended in only near third person so nothing pops
-    if (world) {
-      const w = clamp((s - 0.55) / 0.4, 0, 1);
-      if (w > 0) {
-        let hit = dist;
-        for (let d = 0.6; d < Math.min(dist, 30); d += 0.25) {
-          const x = this.tx - fxv * d, y = this.ty - fyv * d, z = this.tz - fzv * d;
-          if (world.inside(Math.floor(x), Math.floor(y), Math.floor(z)) && world.solidAt(Math.floor(x), Math.floor(y), Math.floor(z))) {
-            hit = Math.max(1.2, d - 0.4);
-            break;
-          }
-        }
-        // move in fast, out slowly
-        this.collDist = hit < this.collDist ? lerp(this.collDist, hit, clamp(dt * 20, 0, 1)) : lerp(this.collDist, hit, clamp(dt * 3, 0, 1));
-        dist = lerp(dist, Math.min(dist, this.collDist), w);
-      } else {
-        this.collDist = 1e9;
-      }
-    }
+    // (occluders are handled by the renderer's cutaway rather than camera collision)
+    void world;
     this.dist = dist;
+    this.nearClip = 0.08;
 
     let sx = 0, sy = 0;
     if (this.shake > 0) {

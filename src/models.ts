@@ -172,30 +172,134 @@ function buildHumanoid(cfg: HumanoidCfg, scale: number): VoxelModel {
 
 // ----------------------------- character designs -----------------------------
 
-/** The hero: oversized plaid flannel over a striped tee, ripped light jeans,
- *  beat-up high-top sneakers, shaggy blond hair and white sunglasses. */
+/** The hero, built at a finer 1/8 voxel scale than everyone else: oversized
+ *  red plaid flannel over a striped tee, ripped light jeans with rolled cuffs,
+ *  beat-up black high-tops, shaggy blond hair, stubble and white oval shades. */
 export function heroModel(): VoxelModel {
-  const flannelA = C('#9c2c2c'), flannelB = C('#3a1e22'), flannelC = C('#5a7a4a');
-  const teeA = C('#e4dcc0'), teeB = C('#3a3a58');
-  return buildHumanoid(
-    {
-      skin: '#eab896', shoe: '#22222a', sole: '#ecebe4',
-      pants: (x, y, z) => {
-        if (z === 0 && (y === 4 || y === 3) && (x === -2 || x === 1)) return y === 4 ? C('#eab896') : C('#e8eef4');
-        return hash3(x, y, z, 2) < 0.2 ? C('#7f9dbd') : C('#94b2cf');
-      },
-      top: (x, y, z) => {
-        if (z === 1 && (x === -1 || x === 0) && y >= 8) return y % 2 ? teeA : teeB; // open flannel, striped tee
-        if (y === 7 && z === 1 && (x === -1 || x === 0)) return teeB;
-        if (y % 3 === 0 || x % 3 === 0) return flannelB;
-        return (x + y) % 5 === 0 ? flannelC : flannelA;
-      },
-      sleeve: (x, y) => (y % 3 === 0 ? flannelB : flannelA),
-      hair: ['#e2c46a', '#b8923c'], hairStyle: 'grunge', glasses: 'white', beard: '#c49a72',
-      item: 'guitar', itemColor: '#5a8ad8',
-    },
-    1 / 6,
-  );
+  const skin = C('#f2c29c'), skinD = C('#d89c78');
+  const jean = C('#9cc6e8'), jeanD = C('#76a0cc'), jeanL = C('#c8e2f6'), thread = C('#f6f6f2');
+  const canvas = C('#1c1c26'), white = C('#f4f2ea'), rubber = C('#d8d2c2');
+  const fl = C('#d8323c'), flD = C('#86202a'), flK = C('#2a0c12'), flY = C('#f0c848');
+  const teeA = C('#f0ead6'), teeB = C('#34345a');
+  const h1 = C('#f6dc7c'), h2 = C('#dcb452'), h3 = C('#a8803a');
+  const hair = (x: number, y: number, z: number) => { const h = hash3(x, y, z, 5); return h < 0.2 ? h3 : h < 0.55 ? h2 : h1; };
+  const plaid = (x: number, y: number) => {
+    const bx = (x + 8) % 4 === 0, by = y % 4 === 1;
+    if (bx && by) return flK;
+    if (bx || by) return flD;
+    if ((x + 8) % 4 === 2 && y % 4 === 3) return flY;
+    return fl;
+  };
+
+  const legL = new PartBuilder(), legR = new PartBuilder();
+  for (const [leg, x0, left] of [[legL, -3, true], [legR, 0, false]] as [PartBuilder, number, boolean][]) {
+    leg.box(x0, 3, -1, x0 + 2, 9, 1, (x, y, z) => {
+      if (y === 3) return jeanL; // rolled cuff
+      if (z === 1) {
+        if (left && y === 6 && x !== x0 + 2) return thread; // blown-out knee
+        if (left && y === 5 && x !== x0 + 2) return skin;
+        if (left && y === 4 && x === x0 + 1) return thread;
+        if (!left && y === 8 && x === x0 + 1) return thread;
+        if (!left && y === 7 && x === x0 + 1) return skin;
+        if (y >= 7 && x === x0 + 1) return jeanL; // worn fade
+      }
+      if (z === -1 || x === (left ? x0 : x0 + 2)) return jeanD;
+      return jean;
+    });
+    leg.box(x0, 0, -1, x0 + 2, 2, 2, (x, y, z) => {
+      if (y === 2 && z === 2) return null;
+      if (y === 0) return rubber;
+      if (z === 2) return white; // toe cap
+      if (y === 2 && z === 1 && x === x0 + 1) return white; // laces
+      if (y === 1 && x === (left ? x0 : x0 + 2) && z === 0) return white; // ankle patch
+      return canvas;
+    });
+  }
+
+  const torso = new PartBuilder();
+  torso.box(-4, 10, -2, 3, 16, 1, (x, y, z) => {
+    if (z === 1 && (x === -1 || x === 0)) return y === 16 ? skin : y % 2 ? teeA : teeB; // open shirt, striped tee
+    if (z === 1 && y === 16 && (x === -2 || x === 1)) return C('#f0505a'); // collar
+    if (z === 1 && y === 14 && (x === -3 || x === 2)) return flK; // chest pockets
+    return plaid(x, y);
+  });
+  // untucked hem hanging a little lower at the back and sides
+  torso.box(-4, 9, -2, 3, 9, -1, (x) => plaid(x, 9));
+
+  const armL = new PartBuilder(), armR = new PartBuilder();
+  for (const [arm, x0] of [[armL, -6], [armR, 4]] as [PartBuilder, number][]) {
+    arm.box(x0, 9, -1, x0 + 1, 16, 0, (x, y) => {
+      if (y <= 10) return y === 9 ? skinD : skin;
+      if (y === 11) return flK; // cuff
+      return plaid(x, y);
+    });
+  }
+
+  const head = new PartBuilder();
+  head.box(-3, 17, -2, 2, 22, 3, skin);
+  // stubble, mouth, nose, white oval shades
+  head.box(-2, 17, 3, 1, 17, 3, C('#caa07a')).set(-1, 17, 3, C('#a0625a')).set(0, 17, 3, C('#a0625a'));
+  head.set(-3, 18, 3, C('#d8ac84')).set(2, 18, 3, C('#d8ac84'));
+  const W = C('#fbfbf6'), K = C('#14141c');
+  head.set(-1, 18, 4, skinD).set(0, 18, 4, skinD);
+  [K, K, W, W, K, K].forEach((c, i) => head.set(i - 3, 19, 4, c));
+  for (let x = -3; x <= 2; x++) head.set(x, 20, 4, W);
+  head.set(-3, 18, 4, W).set(2, 18, 4, W);
+  // hair: crown with a centre part, shoulder-length sides and back, messy bangs
+  head.box(-3, 23, -2, 2, 23, 3, (x, y, z) => (x === -1 && z > -1 ? h3 : hair(x, y, z)));
+  head.box(-4, 13, -2, -4, 23, 2, (x, y, z) => (y < 14 + Math.floor(hash3(x, y, z, 6) * 3) ? null : hair(x, y, z)));
+  head.box(3, 13, -2, 3, 23, 2, (x, y, z) => (y < 14 + Math.floor(hash3(x, y, z, 7) * 3) ? null : hair(x, y, z)));
+  head.box(-4, 12, -3, 3, 23, -3, (x, y, z) => (y < 12 + Math.floor(hash3(x, 0, z, 8) * 4) ? null : hair(x, y, z)));
+  head.box(-3, 21, 4, 2, 22, 4, (x, y, z) => (y === 21 && (x === -2 || x === 0 || x === 1) ? null : hair(x, y, z)));
+  head.set(-3, 24, 0, h1).set(0, 24, 1, h2).set(2, 24, -1, h1);
+
+  return makeModel(1 / 8, [
+    ['legL', legL], ['legR', legR], ['torso', torso], ['armL', armL], ['armR', armR], ['head', head], ['item', offsetGuitar()],
+  ]);
+}
+
+/** An offset-waist short-scale guitar in sonic blue with a red tortoiseshell
+ *  pickguard, chrome bridge and tremolo, rosewood board and a big headstock. */
+export function offsetGuitar(): PartBuilder {
+  const b = new PartBuilder();
+  const blue = C('#93cfdc'), blueD = C('#6aaab8'), tort = C('#9a1c1c'), tortD = C('#5a0c0c');
+  const chrome = C('#e2e6ee'), black = C('#16161a'), cream = C('#f2ead2');
+  const rose = C('#3c2216'), maple = C('#e6b864'), mapleD = C('#c89440'), dot = C('#f4f0e4');
+  const rows = [
+    '..###...#', // y = 3  (upper horn)
+    '.#####.##', // y = 2
+    '#########', // y = 1
+    '#########', // y = 0
+    '#########', // y = -1
+    '.########', // y = -2 (lower horn)
+    '..#####..', // y = -3
+  ];
+  rows.forEach((r, i) => {
+    const y = 3 - i;
+    [...r].forEach((ch, k) => {
+      if (ch !== '#') return;
+      const x = k - 5;
+      b.set(x, y, 0, blueD).set(x, y, 1, blue);
+    });
+  });
+  // tortoiseshell pickguard over the front
+  for (let y = -2; y <= 2; y++)
+    for (let x = -2; x <= 2; x++) {
+      if (!b.has(x, y, 1) || (y === 2 && x < -1) || (y === -2 && x > 1)) continue;
+      b.set(x, y, 1, hash3(x, y, 1, 21) < 0.35 ? tortD : tort);
+    }
+  // hardware on top of the front face
+  for (let y = -1; y <= 1; y++) b.set(-4, y, 2, chrome); // bridge
+  b.set(-5, 0, 1, chrome).set(-5, 1, 1, chrome); // tremolo plate
+  b.set(-3, 2, 2, chrome); // trem arm
+  for (let y = -1; y <= 1; y++) b.set(-2, y, 2, black).set(1, y, 2, cream); // humbucker + single coil
+  b.set(-1, -3, 2, black).set(0, -3, 2, black).set(-2, -3, 1, chrome); // knobs & control plate
+  // neck: rosewood board with dot inlays over a maple back
+  for (let x = 4; x <= 9; x++) b.set(x, 0, 0, maple).set(x, 0, 1, x % 2 === 0 && x > 4 ? dot : rose);
+  // big headstock with a row of tuners
+  for (const [x, y] of [[10, 0], [11, 0], [10, 1], [11, 1], [12, 1], [11, 2], [12, 2]]) b.set(x, y, 0, maple).set(x, y, 1, y === 0 ? mapleD : maple);
+  b.set(10, 2, 1, chrome).set(11, 3, 1, chrome).set(12, 3, 1, chrome).set(13, 2, 1, chrome);
+  return b;
 }
 
 const zebra = (a: string, b: string) => (x: number, y: number, z: number) => ((x + y * 2 + z) % 4 < 2 ? C(a) : C(b));
@@ -365,14 +469,22 @@ export interface AnimState {
   walkAmt: number; // 0..1
   air: boolean;
   act: number; // action progress 0..1, <0 none
-  actKind: 'smash' | 'throw' | 'chord' | 'slam' | 'none';
+  actKind: 'smash' | 'throw' | 'chord' | 'slam' | 'charge' | 'finisher' | 'none';
   hurt: number;
   headbang?: boolean;
   item: ItemKind;
 }
 
+/** Joint positions (in the model's voxel units) for the shared animation rig. */
+export interface Rig {
+  hipY: number; shoulderX: number; shoulderY: number; neckY: number; neckZ: number;
+  itemPos: [number, number, number]; swingY: number; carry: [number, number, number]; k: number;
+}
+export const DEFAULT_RIG: Rig = { hipY: 7, shoulderX: 4, shoulderY: 12.5, neckY: 13, neckZ: 0.5, itemPos: [-0.5, 9.5, 2.6], swingY: 12, carry: [4, 6, 0], k: 1 };
+export const HERO_RIG: Rig = { hipY: 10, shoulderX: 5, shoulderY: 16, neckY: 17, neckZ: 0.5, itemPos: [-0.6, 12.6, 3.2], swingY: 15.5, carry: [5, 8, 0], k: 4 / 3 };
+
 const scratch: Mat[] = [];
-export function poseHumanoid(a: AnimState): Mat[] {
+export function poseHumanoid(a: AnimState, rig: Rig = DEFAULT_RIG): Mat[] {
   const out = scratch;
   const sw = Math.sin(a.walk) * 0.75 * a.walkAmt;
   let legL = a.air ? -0.7 : sw, legR = a.air ? 0.35 : -sw;
@@ -395,6 +507,21 @@ export function poseHumanoid(a: AnimState): Mat[] {
     } else if (a.actKind === 'throw') {
       armR = p < 0.3 ? 1.0 * (p / 0.3) : 1.0 - 2.8 * Math.min(1, (p - 0.3) / 0.3);
       armRz = 0;
+    } else if (a.actKind === 'charge') {
+      // guitar hoisted overhead, trembling with stored energy
+      swing = -2.75 + Math.sin(a.t * 60) * 0.06;
+      armL = armR = swing - 0.45;
+      armLz = armRz = 0;
+      lean -= 0.18;
+      legL = 0.25; legR = -0.25;
+    } else if (a.actKind === 'finisher') {
+      // leap with the guitar high, then a crushing overhead slam
+      swing = p < 0.45 ? -2.75 - 0.3 * (p / 0.45) : -3.05 + 4.1 * Math.min(1, (p - 0.45) / 0.12);
+      if (p > 0.8) swing *= 1 - (p - 0.8) / 0.2;
+      armL = armR = swing - 0.45;
+      armLz = armRz = 0;
+      lean += p < 0.45 ? -0.3 : 0.45 * (1 - Math.max(0, p - 0.8) / 0.2);
+      if (p < 0.45) { legL = -0.9; legR = 0.5; } else { legL = 0.5; legR = -0.6; }
     } else if (a.actKind === 'chord') {
       lean -= 0.35 * Math.sin(Math.min(1, p * 2) * Math.PI * 0.5);
       headRx = -0.4;
@@ -404,18 +531,19 @@ export function poseHumanoid(a: AnimState): Mat[] {
     }
   }
   if (a.air) lean += 0.1;
-  const upper = mChain(mTrans(0, bob, 0), mPivot(0, 7, 0, lean));
-  out[0] = mMul(mTrans(0, bob * 0.3, 0), mPivot(0, 7, 0, legL));
-  out[1] = mMul(mTrans(0, bob * 0.3, 0), mPivot(0, 7, 0, legR));
+  const R = rig, k = R.k;
+  const upper = mChain(mTrans(0, bob * k, 0), mPivot(0, R.hipY, 0, lean));
+  out[0] = mMul(mTrans(0, bob * 0.3 * k, 0), mPivot(0, R.hipY, 0, legL));
+  out[1] = mMul(mTrans(0, bob * 0.3 * k, 0), mPivot(0, R.hipY, 0, legR));
   out[2] = upper;
-  out[3] = mMul(upper, mPivot(-4, 12.5, 0, armL, 0, armLz));
-  out[4] = mMul(upper, mPivot(4, 12.5, 0, armR + strum, 0, armRz));
-  out[5] = mMul(upper, mPivot(0, 13, 0.5, headRx));
+  out[3] = mMul(upper, mPivot(-R.shoulderX, R.shoulderY, 0, armL, 0, armLz));
+  out[4] = mMul(upper, mPivot(R.shoulderX, R.shoulderY, 0, armR + strum, 0, armRz));
+  out[5] = mMul(upper, mPivot(0, R.neckY, R.neckZ, headRx));
   if (a.item === 'briefcase' || a.item === 'skateboard' || a.item === 'joystick') {
-    out[6] = mMul(out[4], mTrans(4, 6, 0));
+    out[6] = mMul(out[4], mTrans(R.carry[0], R.carry[1], R.carry[2]));
   } else if (playing) {
-    const rest = mChain(mTrans(-0.5, 9.5, 2.6), mRotZ(0.4), mRotY(0.15));
-    out[6] = mChain(upper, mPivot(0, 12, 0.5, swing), rest);
+    const rest = mChain(mTrans(R.itemPos[0], R.itemPos[1], R.itemPos[2]), mRotZ(0.4), mRotY(0.15));
+    out[6] = mChain(upper, mPivot(0, R.swingY, 0.5, swing), rest);
   } else {
     out[6] = mIdent();
   }

@@ -562,7 +562,7 @@ export class Renderer {
           const j = i + W, nd = nb[j];
           if (nd !== 2 && nd !== 3 && nd !== 255 && ids[j] === 0 && depth[j] >= d && z - 1 / depth[j] < 1.2) c = shade(c, 1.28);
         }
-        if (z > fogS) {
+        if (z > fogS && (myId === 0 || myId >= 200)) { // keep characters crisp: no fog
           // ordered-dithered fog in 4 steps
           const f = clamp((z - fogS) * invF, 0, 1);
           const q = Math.min(4, Math.floor(f * 4 + bay));

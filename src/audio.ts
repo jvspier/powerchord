@@ -99,7 +99,7 @@ export class Audio {
     }
   }
 
-  sfx(name: 'smash' | 'pick' | 'hit' | 'hurt' | 'jump' | 'dive' | 'dash' | 'pickup' | 'enemyShot' | 'break' | 'die' | 'select' | 'bossDie' | 'checkpoint') {
+  sfx(name: 'smash' | 'pick' | 'hit' | 'hurt' | 'jump' | 'dive' | 'dash' | 'pickup' | 'enemyShot' | 'break' | 'die' | 'select' | 'bossDie' | 'checkpoint' | 'charge' | 'ready') {
     if (!this.ctx) return;
     const t = this.ctx.currentTime, m = this.master;
     switch (name) {
@@ -148,6 +148,13 @@ export class Audio {
         break;
       case 'select':
         this.osc('square', 880, t, 0.05, 0.1, m);
+        break;
+      case 'charge':
+        this.osc('sawtooth', 110, t, 0.6, 0.08, m, 520);
+        break;
+      case 'ready':
+        this.osc('square', 1320, t, 0.06, 0.12, m);
+        this.osc('square', 1760, t + 0.07, 0.1, 0.12, m);
         break;
       case 'checkpoint':
         this.osc('triangle', 523, t, 0.12, 0.2, m);

@@ -3,7 +3,7 @@
 A browser-based 2.5D pixel-art metroidvania written in TypeScript on a plain HTML canvas.
 No 3D engine: every voxel is drawn by a small custom software rasterizer.
 
-You play a flannel-wearing 90s grunge guitarist touring four worlds to take down
+You play a flannel-wearing 90s grunge guitarist (with a sonic-blue offset-waist guitar) touring four worlds to take down
 **Rikki Spandex**, the evil 80s hair-metal guitar god. Fight with your guitar:
 smash enemies with it, throw guitar picks, or unleash a distorted **power chord** shockwave.
 
@@ -22,6 +22,7 @@ npm run build    # type-check + production build into dist/
 | Move | WASD / arrows | left stick / d-pad |
 | Jump (again in mid-air: Stage Dive) | Space | A |
 | Guitar smash (also bats projectiles back) | J / left click | X |
+| Charged finisher: keep holding after a smash, release when it flashes (costs feedback) | hold J | hold X |
 | Throw pick (soft auto-aim) | K / right click | B |
 | Power chord (costs feedback, breaks amp walls) | L / R | Y |
 | Mosh dash | Shift | RB |
@@ -71,10 +72,10 @@ with the tour van. Progress is saved in `localStorage`.
   shadows at the foot of walls are dithered bands computed per texel.
 - `src/camera.ts` — gameplay is isometric (pixel-snapped so the world scrolls in whole
   pixels, like a console background layer). For special moments — the power chord, boss
-  intros and boss finishes — the camera swoops into a cinematic third-person shot and back
+  intros, boss finishes and the charged guitar-smash finisher — the camera swoops into a cinematic third-person shot and back
   without cutting: pitch, yaw, the visible height at the target and `tan(fov/2)` are
   interpolated between a ~1° near-orthographic view and a 62° perspective view (a dolly zoom),
-  with camera collision blended in only near the third-person end.
+  while a cutaway that grows with the transition peels away any walls between the camera and the hero.
 - `src/voxels.ts` — voxel grid, materials and 16×16 chunk meshing with baked sun shadows
   (ray-marched), per-face ambient occlusion and per-voxel colour jitter. Chunks re-mesh when
   amp walls are destroyed.

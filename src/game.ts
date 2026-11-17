@@ -8,7 +8,7 @@ import { WORLDS, WorldDef, generateWorld, GenResult, Ability, EnemyKind } from '
 import { Actor, drawModel } from './entities';
 import {
   heroModel, poserModel, roadieModel, droneModel, bossModel, pickModel, noteModel, tapeModel, pouchModel,
-  heartModel, micStandModel, poseHumanoid, textModel, ItemKind,
+  heartModel, micStandModel, poseHumanoid, textModel, ItemKind, HERO_RIG,
 } from './models';
 import { clamp, lerp, angleLerp, hex, mix, mIdent, mRotX, mRotY, mRotZ, mPivot, mChain, mTrans, mScale, wrapAngle, TAU } from './math';
 
@@ -41,9 +41,13 @@ class Player extends Actor {
   dashZ = 1;
   actT = -1;
   actDur = 0;
-  actKind: 'smash' | 'throw' | 'chord' | 'none' = 'none';
+  actKind: 'smash' | 'throw' | 'chord' | 'finisher' | 'none' = 'none';
   actHit = false;
+  charging = false;
+  chargeT = 0;
+  chargeReady = false;
   invuln = 0;
+  blinkT = 0;
   pickRegen = 0;
   safe: [number, number, number] = [0, 0, 0];
 }
@@ -433,7 +437,7 @@ export class Game {
     this.loadWorld(Math.min(start, WORLDS.length - 1));
     if (this.save.beaten.length === 0) {
       this.msg('WASD MOVE  SPACE JUMP  J SMASH  K PICKS', 7);
-      this.msg('L POWER CHORD (ONCE LEARNED)   Q/E: ROTATE VIEW', 7);
+      this.msg('HOLD J AFTER A SMASH TO CHARGE A FINISHER   Q/E: ROTATE VIEW', 7);
     }
   }
 
@@ -480,6 +484,7 @@ export class Game {
     if (ml > 1) { mx /= ml; mz /= ml; }
 
     p.invuln = Math.max(0, p.invuln - dt);
+    p.blinkT = Math.max(0, p.blinkT - dt);
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.coyote = p.onGround ? 0.1 : Math.max(0, p.coyote - dt);
     p.jumpBuf = inp.pressed('Space') ? 0.13 : Math.max(0, p.jumpBuf - dt);
@@ -491,7 +496,7 @@ export class Game {
     }
 
     // --- actions
-    const busy = p.actT >= 0;
+    const busy = p.actT >= 0 || p.charging;
     if (!busy && inp.pressed('KeyJ', 'Mouse0')) this.startAct('smash', 0.42);
     else if (!busy && inp.pressed('KeyK', 'Mouse2')) {
       if (p.picks > 0) this.startAct('throw', 0.25);
@@ -501,7 +506,8 @@ export class Game {
       else {
         this.startAct('chord', 1.0);
         // cinematic hero shot: swoop to a low 3/4 front view in slow motion
-        this.cam.startCinematic(p.yaw + Math.PI + 0.6, 0.85, null, 7.5, 0.22);
+        const b = p.yaw + Math.PI;
+        this.cam.startCinematic(this.bestCineYaw([b + 0.6, b - 0.6, b + 1.2, b - 1.2, p.yaw + 0.6], p.x, p.y + 2.5, p.z, 7.5, 0.22), 0.85, null, 7.5, 0.22);
         this.slowmo = 0.95;
         this.slowFactor = 0.5;
         p.invuln = Math.max(p.invuln, 1.2);
@@ -525,12 +531,44 @@ export class Game {
         if (p.actKind === 'throw' && prog > 0.4) { p.actHit = true; this.throwPick(); }
         if (p.actKind === 'chord' && prog > 0.42) { p.actHit = true; this.doChord(); }
       }
-      if (prog >= 1) { p.actT = -1; p.actKind = 'none'; }
+      if (p.actKind === 'finisher' && !p.actHit && prog > 0.4 && !p.onGround) p.vy = Math.min(p.vy, -26);
+      if (p.actKind === 'finisher' && !p.actHit && prog > 0.42 && (p.onGround || prog > 0.6)) { p.actHit = true; this.doFinisher(); }
+      if (prog >= 1) {
+        // keep holding the smash button to charge a finisher
+        if (p.actKind === 'smash' && inp.held('KeyJ', 'Mouse0')) {
+          p.charging = true; p.chargeT = 0; p.chargeReady = false;
+          this.audio.sfx('charge');
+        }
+        p.actT = -1; p.actKind = 'none';
+      }
+    }
+    if (p.charging) {
+      if (inp.held('KeyJ', 'Mouse0')) {
+        p.chargeT += dt;
+        const a = Math.random() * TAU;
+        const gx = p.x - Math.sin(p.yaw) * 0.3, gz = p.z - Math.cos(p.yaw) * 0.3;
+        this.particles.push({
+          x: gx + Math.cos(a) * 1.2, y: p.y + 4 + Math.sin(a) * 0.8, z: gz + Math.sin(a) * 1.2,
+          vx: -Math.cos(a) * 3, vy: -Math.sin(a) * 2, vz: -Math.sin(a) * 3, life: 0.25, max: 0.25,
+          col: p.chargeReady ? hex('#ffe23a') : hex('#93cfdc'), size: 0.12, g: 0,
+        });
+        if (!p.chargeReady && p.chargeT > 0.6) {
+          p.chargeReady = true;
+          p.flashT = 0.08;
+          this.audio.sfx('ready');
+        }
+      } else {
+        p.charging = false;
+        if (p.chargeReady) {
+          if (p.feedback < 25) this.msg('NEED MORE FEEDBACK!', 1.2, hex('#ffe23a'));
+          else this.startFinisher();
+        }
+      }
     }
 
     // --- movement
     const speed = p.inLiquid ? 4.5 : 8;
-    let slow = p.actKind === 'smash' ? 0.35 : p.actKind === 'chord' ? 0.1 : 1;
+    let slow = p.actKind === 'smash' ? 0.35 : p.actKind === 'chord' ? 0.1 : p.actKind === 'finisher' ? 0.6 : p.charging ? 0.3 : 1;
     if (p.dashT > 0) {
       p.dashT -= dt;
       p.vx = p.dashX * 24;
@@ -603,18 +641,83 @@ export class Game {
     p.anim.walk += hs * dt * 1.5;
     p.anim.walkAmt = lerp(p.anim.walkAmt, clamp(hs / 8, 0, 1), clamp(dt * 10, 0, 1));
     p.anim.air = !p.onGround;
-    p.anim.act = p.actT >= 0 ? p.actT / p.actDur : -1;
-    p.anim.actKind = p.actKind;
+    p.anim.act = p.charging ? 0.5 : p.actT >= 0 ? p.actT / p.actDur : -1;
+    p.anim.actKind = p.charging ? 'charge' : p.actKind;
     p.anim.hurt = p.invuln > 0.7 ? 1 : 0;
   }
 
-  startAct(kind: 'smash' | 'throw' | 'chord', dur: number) {
+  startAct(kind: 'smash' | 'throw' | 'chord' | 'finisher', dur: number) {
     const p = this.player;
     p.actKind = kind;
     p.actT = 0;
     p.actDur = dur;
     p.actHit = false;
     if (kind === 'smash') this.audio.sfx('jump');
+  }
+
+  /** Of several candidate cinematic headings, pick the one with the clearest view of `focus`. */
+  bestCineYaw(cands: number[], fx: number, fy: number, fz: number, dist: number, pitch: number) {
+    let best = cands[0], bestFree = -1;
+    for (const yaw of cands) {
+      const cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const dx = -Math.sin(yaw) * cp, dy = sp, dz = -Math.cos(yaw) * cp;
+      let free = dist;
+      for (let d = 0.8; d < dist; d += 0.3) {
+        const x = Math.floor(fx + dx * d), y = Math.floor(fy + dy * d), z = Math.floor(fz + dz * d);
+        if (this.world.inside(x, y, z) && this.world.solidAt(x, y, z)) { free = d; break; }
+      }
+      if (free > bestFree + 0.5) { best = yaw; bestFree = free; }
+      if (free >= dist) break;
+    }
+    return best;
+  }
+
+  /** Guitar-smash finisher: leap, swoop the camera to a low hero shot, slam. */
+  startFinisher() {
+    const p = this.player;
+    p.feedback -= 25;
+    this.startAct('finisher', 1.05);
+    p.vy = 12;
+    p.onGround = false;
+    p.invuln = Math.max(p.invuln, 1.4);
+    const b = p.yaw + Math.PI;
+    const yaw = this.bestCineYaw([b + 0.9, b - 0.9, b + 0.4, b - 0.4, p.yaw + 0.8, p.yaw - 0.8], p.x, p.y + 2.5, p.z, 8, 0.2);
+    this.cam.startCinematic(yaw, 0.9, null, 8, 0.2);
+    this.slowmo = 1.0;
+    this.slowFactor = 0.5;
+    this.audio.sfx('dive');
+  }
+
+  doFinisher() {
+    const p = this.player;
+    const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+    const cx = p.x + fx * 1.4, cz = p.z + fz * 1.4;
+    const RAD = 5.5;
+    this.audio.sfx('smash');
+    this.audio.powerChord(41.2, 1.4, 0.6);
+    this.cam.shake = 2.2;
+    this.flash = 0.5;
+    this.hitstop = 0.09;
+    this.waves.push({ x: cx, y: p.y + 0.1, z: cz, r: 0.3, maxR: RAD + 0.5, speed: 18, friendly: true, hit: false, col: hex('#ff8a20') });
+    this.waves.push({ x: cx, y: p.y + 0.6, z: cz, r: 0.2, maxR: RAD, speed: 13, friendly: true, hit: false, col: hex('#93cfdc') });
+    for (const e of this.enemies) {
+      if (e.kind === 'boss' && !this.bossActive) continue;
+      const d = Math.hypot(e.x - cx, e.z - cz);
+      if (d < RAD + e.r && Math.abs(e.y - p.y) < 4) {
+        this.damageEnemy(e, 6, (e.x - cx) / (d || 1), (e.z - cz) / (d || 1), 18);
+        if (e.kind !== 'boss' && !e.flying) e.vy = 13;
+      }
+    }
+    this.projectiles = this.projectiles.filter((pr) => pr.friendly || Math.hypot(pr.x - cx, pr.z - cz) > RAD);
+    // debris kicked up from the floor plus guitar sparks
+    const gc = MATS[this.world.get(Math.floor(cx), Math.floor(p.y - 0.5), Math.floor(cz))].color || hex('#a0a0a0');
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * TAU, sp = 3 + Math.random() * 6;
+      this.particles.push({
+        x: cx, y: p.y + 0.2, z: cz, vx: Math.cos(a) * sp, vy: 5 + Math.random() * 7, vz: Math.sin(a) * sp,
+        life: 0.7 + Math.random() * 0.5, max: 1.2, col: i % 3 === 0 ? hex('#ffe23a') : i % 3 === 1 ? hex('#93cfdc') : gc, size: 0.22, g: 22,
+      });
+    }
   }
 
   doSmash() {
@@ -733,6 +836,7 @@ export class Game {
     if (p.invuln > 0 || this.state !== 'play') return;
     p.hp -= dmg;
     p.invuln = 1.1;
+    p.blinkT = 1.1;
     p.flashT = 0.15;
     this.audio.sfx('hurt');
     this.cam.shake = Math.max(this.cam.shake, 0.9);
@@ -1275,6 +1379,7 @@ export class Game {
     const r = this.r, c = this.cam, light = this.def.light;
     r.clear();
     r.setCamera(c.px, c.py, c.pz, c.yaw, c.pitch, c.fov);
+    r.near = c.nearClip;
     const s = c.s;
     r.fogStart = c.dist + lerp(14, 18, s);
     r.fogEnd = c.dist + lerp(70, 56, s);
@@ -1294,7 +1399,8 @@ export class Game {
     void ident;
     // cut away terrain that hides the player (mostly for the isometric view)
     const pl = this.player;
-    const cutR = lerp(4.2, 0, clamp(s * 1.6, 0, 1));
+    // grows from a small iso cutaway into removing everything in front during cinematics
+    const cutR = lerp(4.2, 80, Math.pow(clamp(s / 0.45, 0, 1), 2));
     r.cutActive = cutR > 0.3 && this.state !== 'title';
     if (r.cutActive) {
       const [vx, vy, vz] = r.toView(pl.x, pl.y + 1.4, pl.z);
@@ -1321,9 +1427,9 @@ export class Game {
     // actors
     const p = this.player;
     if (this.state !== 'dead') {
-      const blink = p.invuln > 0 && Math.floor(this.time * 20) % 2 === 0 && p.invuln < 1;
+      const blink = p.blinkT > 0 && Math.floor(this.time * 20) % 2 === 0 && p.blinkT < 1;
       if (!blink) {
-        drawModel(r, light, p.model, poseHumanoid(p.anim), p.x, p.y + p.stepOffset, p.z, p.yaw, 1, { flags: FLAG_XRAY, id: 1, flash: p.flashT > 0 });
+        drawModel(r, light, p.model, poseHumanoid(p.anim, HERO_RIG), p.x, p.y + p.stepOffset, p.z, p.yaw, 1, { flags: FLAG_XRAY, id: 1, flash: p.flashT > 0 });
       }
     }
     const plz = r.toView(p.x, p.y + 1.4, p.z)[2];
@@ -1541,7 +1647,7 @@ export class Game {
     r.textCentered('PAUSED', 30, hex('#ff3aa8'), 3);
     const lines = [
       'WASD / ARROWS ..... MOVE', 'SPACE ............. JUMP (AGAIN IN AIR: STAGE DIVE)', 'J / LEFT CLICK .... GUITAR SMASH',
-      'K / RIGHT CLICK ... THROW PICK', 'L / R ............. POWER CHORD (COSTS FEEDBACK)', 'SHIFT ............. MOSH DASH',
+      'HOLD J AFTER SMASH  CHARGED FINISHER (COSTS FEEDBACK)', 'K / RIGHT CLICK ... THROW PICK', 'L / R ............. POWER CHORD (COSTS FEEDBACK)', 'SHIFT ............. MOSH DASH',
       'Q / E ............. ROTATE THE VIEW',  'ENTER / F ......... INTERACT',
       'M ................. MUSIC ON/OFF', '` ................. FPS',
     ];
