@@ -127,6 +127,7 @@ export class Game {
   hitstop = 0;
   flash = 0;
   slowmo = 0;
+  slowFactor = 0.35;
   showFps = false;
   fps = 60;
   finalWon = false;
@@ -209,6 +210,7 @@ export class Game {
     this.player = p;
     this.respawn = [p.x, p.y, p.z];
     this.cam.snapTo(p.x, p.y + 1.4, p.z);
+    if (this.state !== 'title') { this.cam.cine = 0; this.cam.focus = null; this.cam.mode = 0; this.cam.yawTarget = this.cam.isoYaw; }
     this.projectiles = [];
     this.particles = [];
     this.waves = [];
@@ -336,7 +338,7 @@ export class Game {
         }
         if (this.slowmo > 0) {
           this.slowmo -= dt;
-          dt *= 0.35;
+          dt *= this.slowFactor;
         }
         this.updatePlay(dt);
         break;
@@ -373,7 +375,8 @@ export class Game {
       case 'victory':
         this.victoryT += dt;
         this.updateParticles(dt);
-        this.cam.yawTarget += dt * 0.2;
+        this.cam.isoYaw += dt * 0.2;
+        this.cam.yawTarget = this.cam.isoYaw;
         this.updateCamera(dt);
         if (this.victoryT > 3 && inp.pressed('Enter')) {
           this.state = 'title';
@@ -401,8 +404,8 @@ export class Game {
     p.anim.t += dt;
     const want = Math.floor(this.titleT / 5) % 2 === 1 ? 1 : 0;
     if (this.cam.mode !== want) this.cam.toggle();
-    if (this.cam.mode === 0 && Math.floor(this.titleT / 5) % 4 === 0) this.cam.yawTarget += dt * 0.25;
-    this.cam.update(dt, p.x, p.y, p.z, this.world, p.yaw);
+    if (this.cam.mode === 0 && Math.floor(this.titleT / 5) % 4 === 0) { this.cam.isoYaw += dt * 0.25; this.cam.yawTarget = this.cam.isoYaw; }
+    this.cam.update(dt, p.x, p.y, p.z, this.world, null);
     const inp = this.input;
     if (inp.pressed('Enter', 'Space', 'NumpadEnter', 'Mouse0')) {
       this.audio.init();
@@ -419,13 +422,15 @@ export class Game {
       this.persist();
     }
     this.state = 'play';
-    if (this.cam.mode !== 0) this.cam.toggle();
-    this.cam.yawTarget = Math.PI / 4;
+    this.cam.cine = 0;
+    this.cam.focus = null;
+    this.cam.mode = 0;
+    this.cam.yawTarget = this.cam.isoYaw = Math.PI / 4;
     const start = fresh ? 0 : this.save.unlocked;
     this.loadWorld(Math.min(start, WORLDS.length - 1));
     if (this.save.beaten.length === 0) {
       this.msg('WASD MOVE  SPACE JUMP  J SMASH  K PICKS', 7);
-      this.msg('C: SWITCH ISO / 3RD PERSON   Q/E: ROTATE', 7);
+      this.msg('L POWER CHORD (ONCE LEARNED)   Q/E: ROTATE VIEW', 7);
     }
   }
 
@@ -454,24 +459,17 @@ export class Game {
   updateCamera(dt: number) {
     const inp = this.input, c = this.cam, p = this.player;
     if (this.state === 'play') {
-      if (inp.pressed('KeyC', 'Tab')) c.toggle();
-      if (c.mode === 0) {
-        if (inp.pressed('KeyQ')) c.rotateStep(-1);
-        if (inp.pressed('KeyE')) c.rotateStep(1);
-      } else {
-        if (inp.held('KeyQ')) c.rotate(-1, dt);
-        if (inp.held('KeyE')) c.rotate(1, dt);
-      }
+      if (inp.pressed('KeyQ')) c.rotateStep(-1);
+      if (inp.pressed('KeyE')) c.rotateStep(1);
     }
-    const moving = Math.hypot(p.vx, p.vz) > 2 && !inp.held('KeyQ', 'KeyE') && !inp.held('KeyS', 'ArrowDown');
-    c.update(dt, p.x, p.y + p.stepOffset, p.z, this.world, moving ? p.yaw : null);
+    c.update(dt, p.x, p.y + p.stepOffset, p.z, this.world, null);
   }
 
   controlPlayer(dt: number) {
     const p = this.player, inp = this.input, w = this.world;
     const ix = (inp.held('KeyD', 'ArrowRight') ? 1 : 0) - (inp.held('KeyA', 'ArrowLeft') ? 1 : 0);
     const iy = (inp.held('KeyW', 'ArrowUp') ? 1 : 0) - (inp.held('KeyS', 'ArrowDown') ? 1 : 0);
-    const cy = this.cam.yaw;
+    const cy = this.cam.isoYaw;
     const jx = ix + inp.padX, jy = iy + inp.padY;
     let mx = Math.sin(cy) * jy + Math.cos(cy) * jx;
     let mz = Math.cos(cy) * jy - Math.sin(cy) * jx;
@@ -497,7 +495,14 @@ export class Game {
     } else if (!busy && inp.pressed('KeyL', 'KeyR')) {
       if (!this.has('chord')) this.msg("YOU DON'T KNOW THAT CHORD YET", 1.5);
       else if (p.feedback < 40) this.msg('NEED MORE FEEDBACK!', 1.2, hex('#ffe23a'));
-      else this.startAct('chord', 0.7);
+      else {
+        this.startAct('chord', 1.0);
+        // cinematic hero shot: swoop to a low 3/4 front view in slow motion
+        this.cam.startCinematic(p.yaw + Math.PI + 0.6, 0.85, null, 7.5, 0.22);
+        this.slowmo = 0.95;
+        this.slowFactor = 0.5;
+        p.invuln = Math.max(p.invuln, 1.2);
+      }
     }
     if (inp.pressed('ShiftLeft', 'ShiftRight') && this.has('dash') && p.dashCd <= 0 && (p.onGround || !p.airDashUsed)) {
       p.dashT = 0.22;
@@ -515,7 +520,7 @@ export class Game {
       if (!p.actHit) {
         if (p.actKind === 'smash' && prog > 0.45) { p.actHit = true; this.doSmash(); }
         if (p.actKind === 'throw' && prog > 0.4) { p.actHit = true; this.throwPick(); }
-        if (p.actKind === 'chord' && prog > 0.15) { p.actHit = true; this.doChord(); }
+        if (p.actKind === 'chord' && prog > 0.42) { p.actHit = true; this.doChord(); }
       }
       if (prog >= 1) { p.actT = -1; p.actKind = 'none'; }
     }
@@ -763,6 +768,12 @@ export class Game {
   bossDefeated(e: Enemy) {
     this.audio.sfx('bossDie');
     this.slowmo = 1.5;
+    this.slowFactor = 0.35;
+    {
+      const p = this.player;
+      const yaw = Math.atan2(e.x - p.x, e.z - p.z) + 0.7;
+      this.cam.startCinematic(yaw, 2.4, [e.x, e.y + e.h * 0.35, e.z], 6 + e.scale * 2.5, 0.22);
+    }
     this.cam.shake = 2;
     this.flash = 0.8;
     this.bossActive = false;
@@ -779,7 +790,7 @@ export class Game {
       setTimeout(() => {
         this.state = 'victory';
         this.victoryT = 0;
-        if (this.cam.mode !== 0) this.cam.toggle();
+        this.cam.endCinematic();
       }, 3500);
       return;
     }
@@ -905,7 +916,12 @@ export class Game {
         this.bossActive = true;
         e.state = 'move';
         e.timer = 1.5;
-        this.dialog = { name: this.def.bossName, lines: this.def.bossLines, i: 0, t: 0, done: () => this.audio.playSong({ ...SONGS[3], bpm: 140 + this.idx * 6 }) };
+        this.dialog = {
+          name: this.def.bossName, lines: this.def.bossLines, i: 0, t: 0,
+          done: () => { this.cam.endCinematic(); this.audio.playSong({ ...SONGS[3], bpm: 140 + this.idx * 6 }); },
+        };
+        // "versus" shot over the player's shoulder at the boss
+        this.cam.startCinematic(Math.atan2(e.x - p.x, e.z - p.z) + 0.45, 999, [e.x, e.y + e.h * 0.35, e.z], 7 + e.scale * 3, 0.2);
         this.state = 'dialog';
       }
       e.vx = e.vz = 0;
@@ -1210,6 +1226,7 @@ export class Game {
 
   doRespawn() {
     const p = this.player;
+    this.cam.endCinematic();
     this.state = 'play';
     [p.x, p.y, p.z] = this.respawn;
     p.vx = p.vy = p.vz = 0;
@@ -1390,13 +1407,11 @@ export class Game {
     const col = `TAPES ${this.save.collected.filter((c) => c.endsWith('tape')).length}/4  POUCHES ${this.save.collected.filter((c) => c.endsWith('pouch')).length}/4`;
     r.text(col, W - r.textWidth(col) - 6, 14, hex('#a0a0b0'));
     // camera mode
-    const cm = this.cam.mode === 0 ? '[C] ISOMETRIC' : '[C] THIRD PERSON';
-    r.text(cm, W - r.textWidth(cm) - 6, H - 10, hex('#a0a0b0'));
     if (this.showFps) r.text(`${Math.round(this.fps)} FPS  ${r.stats.faces} F`, 6, H - 10, hex('#80ff80'));
 
     // boss bar
     const b = this.boss;
-    if (b && this.bossActive) {
+    if (b && this.bossActive && st === 'play') {
       const bw = 200, bx = (W - bw) / 2, by = H - 24;
       r.textCentered(this.def.bossName, by - 8, hex('#ff3aa8'));
       r.rect(bx - 1, by - 1, bw + 2, 7, hex('#000000'));
@@ -1479,7 +1494,7 @@ export class Game {
     r.textCentered('FLANNEL VS. SPANDEX', y + 70, hex('#c0c8d0'));
     if (Math.floor(t * 2) % 2 === 0) r.textCentered(this.hasSave ? 'PRESS ENTER TO CONTINUE' : 'PRESS ENTER TO START', 130, 0xffffffff);
     if (this.hasSave) r.textCentered('N: NEW GAME', 140, hex('#a0a0b0'));
-    const lines = ['WASD/ARROWS MOVE  SPACE JUMP  J SMASH  K THROW PICK', 'L POWER CHORD  SHIFT DASH  C CAMERA  Q/E ROTATE  M MUSIC'];
+    const lines = ['WASD/ARROWS MOVE  SPACE JUMP  J SMASH  K THROW PICK', 'L POWER CHORD  SHIFT DASH  Q/E ROTATE VIEW  M MUSIC'];
     lines.forEach((l, i) => r.textCentered(l, H - 24 + i * 9, hex('#c0c0c0')));
   }
 
@@ -1513,7 +1528,7 @@ export class Game {
     const lines = [
       'WASD / ARROWS ..... MOVE', 'SPACE ............. JUMP (AGAIN IN AIR: STAGE DIVE)', 'J / LEFT CLICK .... GUITAR SMASH',
       'K / RIGHT CLICK ... THROW PICK', 'L / R ............. POWER CHORD (COSTS FEEDBACK)', 'SHIFT ............. MOSH DASH',
-      'C / TAB ........... ISOMETRIC <-> THIRD PERSON', 'Q / E ............. ROTATE CAMERA', 'ENTER / F ......... INTERACT',
+      'Q / E ............. ROTATE THE VIEW',  'ENTER / F ......... INTERACT',
       'M ................. MUSIC ON/OFF', '` ................. FPS',
     ];
     lines.forEach((l, i) => r.text(l, 60, 60 + i * 10, 0xffffffff));

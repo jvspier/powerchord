@@ -457,7 +457,7 @@ export function generateWorld(index: number, runSeed = 0): GenResult {
       const hh = Math.max(h, BASE + cliffUp) + 14;
       for (let y = h; y < Math.min(WY, hh); y++) {
         const ry = y - h;
-        const win = (theme === 'city' || theme === 'mall') && ry % 3 === 1 && (x + z) % 3 === 1;
+        const win = (theme === 'city' || theme === 'mall') && ry % 3 === 1 && (x + z) % 3 === 1 && y < hh - 2;
         w.set(x, y, z, win ? (theme === 'mall' ? M.GLASS : M.WINDOW) : theme === 'video' ? wallStripe('video', ry, x) : wallMat);
       }
     }

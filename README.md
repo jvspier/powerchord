@@ -25,8 +25,7 @@ npm run build    # type-check + production build into dist/
 | Throw pick (soft auto-aim) | K / right click | B |
 | Power chord (costs feedback, breaks amp walls) | L / R | Y |
 | Mosh dash | Shift | RB |
-| Toggle isometric ⇄ third person | C / Tab | LB |
-| Rotate camera | Q / E | LT / RT |
+| Rotate the isometric view | Q / E | LT / RT |
 | Interact (tour van) / confirm | Enter / F | Start |
 | Pause | Esc / P | Back |
 | Music on/off, FPS | M, ` | |
@@ -55,13 +54,21 @@ with the tour van. Progress is saved in `localStorage`.
 
 - `src/renderer.ts` — 384×216 framebuffer with a float z-buffer (1/z). Voxel faces are
   transformed with 3×4 matrices, back-face culled, near-plane clipped (Sutherland–Hodgman)
-  and scan-converted as convex polygons with top-left fill rules. A post pass adds sky,
-  distance fog and depth-discontinuity outlines; characters hidden behind walls get a dithered
-  x-ray silhouette. The canvas is upscaled with integer nearest-neighbour scaling.
-- `src/camera.ts` — the camera never cuts. Pitch, yaw, the visible height at the target and
-  `tan(fov/2)` are interpolated (log space) between a ~1° near-orthographic isometric view and
-  a 62° perspective third-person view, i.e. a dolly zoom. Third-person camera collision is
-  blended in only near the end of the transition, so nothing pops.
+  and scan-converted with perspective-correct texture mapping. A post pass adds a banded,
+  ordered-dithered sky, dithered fog, light rims on convex top edges, dark outlines around
+  characters and depth edges, and a soft neon glow; characters hidden behind walls get a
+  dithered x-ray silhouette. The canvas is upscaled with integer nearest-neighbour scaling.
+- `src/textures.ts` — procedural 16-bit style textures (bricks, slabs, beveled mall tiles,
+  carpet, planks, VHS spines, CRT scanlines, chain link, foliage...). Texels store shade levels,
+  so each face builds an 8-colour ramp from its lit colour, and textures are mapped in world
+  space so patterns flow across neighbouring voxels instead of repeating per cube. Contact
+  shadows at the foot of walls are dithered bands computed per texel.
+- `src/camera.ts` — gameplay is isometric (pixel-snapped so the world scrolls in whole
+  pixels, like a console background layer). For special moments — the power chord, boss
+  intros and boss finishes — the camera swoops into a cinematic third-person shot and back
+  without cutting: pitch, yaw, the visible height at the target and `tan(fov/2)` are
+  interpolated between a ~1° near-orthographic view and a 62° perspective view (a dolly zoom),
+  with camera collision blended in only near the third-person end.
 - `src/voxels.ts` — voxel grid, materials and 16×16 chunk meshing with baked sun shadows
   (ray-marched), per-face ambient occlusion and per-voxel colour jitter. Chunks re-mesh when
   amp walls are destroyed.

@@ -1,6 +1,7 @@
 // Voxel world grid, materials, chunk meshing with baked lighting, and model builders.
 import { FaceSet } from './renderer';
 import { hex, shade, hash3, clamp, mix } from './math';
+import { matTex } from './textures';
 
 export interface Material {
   name: string;
@@ -114,7 +115,7 @@ export interface Lighting {
 const CS = 16; // chunk size in x/z
 
 export class Chunk {
-  faces: FaceSet = { n: 0, pos: new Float32Array(0), dir: new Uint8Array(0), col: new Uint32Array(0) };
+  faces: FaceSet = { n: 0, pos: new Float32Array(0), dir: new Uint8Array(0), col: new Uint32Array(0), tex: new Uint8Array(0), ao: new Uint8Array(0) };
   dirty = true;
   constructor(public cx: number, public cz: number) {}
 }
@@ -206,7 +207,8 @@ export class VoxelWorld {
   }
 
   private meshChunk(c: Chunk, light: Lighting) {
-    const pos: number[] = [], dir: number[] = [], col: number[] = [];
+    const pos: number[] = [], dir: number[] = [], col: number[] = [], tex: number[] = [], aos: number[] = [];
+    const MT = matTex();
     const x0 = c.cx * CS, z0 = c.cz * CS;
     const x1 = Math.min(this.X, x0 + CS), z1 = Math.min(this.Z, z0 + CS);
     const N = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -217,7 +219,7 @@ export class VoxelWorld {
           const id = this.data[(y * this.Z + z) * this.X + x];
           if (id === 0) continue;
           const mat = MATS[id];
-          const vr = 1 + (hash3(x, y, z, 11) - 0.5) * 2 * mat.vary;
+          const vr = 1 + (hash3(x, y, z, 11) - 0.5) * 0.6 * mat.vary;
           for (let d = 0; d < 6; d++) {
             const n = N[d];
             if (this.occludes(x + n[0], y + n[1], z + n[2], mat)) continue;
@@ -227,36 +229,39 @@ export class VoxelWorld {
               base = this.get(x, y + 1, z) === 0 && hash3(x, y, z + d, 5) < 0.6 ? mix(mat.side, mat.color, 0.55) : mat.side;
             }
             let c2: number;
+            let aoMask = 0;
             if (mat.emissive) {
               c2 = shade(base, vr * 1.05);
             } else {
               const ndl = Math.max(0, n[0] * lx + n[1] * ly + n[2] * lz);
               let sunlit = ndl;
               if (ndl > 0 && this.shadowed(x + 0.5 + n[0] * 0.55, y + 0.5 + n[1] * 0.55, z + 0.5 + n[2] * 0.55, light)) sunlit = 0;
-              // face-level ambient occlusion: count solid cells around the face
-              let occ = 0;
+              // edge occlusion mask: which in-plane neighbours of the cell in front are solid
               const fx = x + n[0], fy = y + n[1], fz = z + n[2];
-              for (let a = -1; a <= 1; a++)
-                for (let b = -1; b <= 1; b++) {
-                  if (a === 0 && b === 0) continue;
-                  let ox = fx, oy = fy, oz = fz;
-                  if (n[0] !== 0) { oy += a; oz += b; } else if (n[1] !== 0) { ox += a; oz += b; } else { ox += a; oy += b; }
-                  if (this.solidAt(ox, oy, oz) && this.inside(ox, oy, oz)) occ++;
-                }
-              const ao = 1 - occ * 0.045;
+              const ua = d < 2 ? 2 : 0, va = d < 2 ? 1 : d < 4 ? 2 : 1;
+              const at = (ax: number, s2: number) => {
+                const ox = fx + (ax === 0 ? s2 : 0), oy = fy + (ax === 1 ? s2 : 0), oz = fz + (ax === 2 ? s2 : 0);
+                return this.inside(ox, oy, oz) && this.solidAt(ox, oy, oz);
+              };
+              aoMask = (at(ua, -1) ? 1 : 0) | (at(ua, 1) ? 2 : 0) | (at(va, -1) ? 4 : 0) | (at(va, 1) ? 8 : 0);
               const sideDim = d === 3 ? 0.55 : d === 2 ? 1 : 0.86 - (d >= 4 ? 0.06 : 0);
               const low = 0.8 + 0.2 * clamp(y / 10, 0, 1);
-              const lum = (light.ambient * sideDim + light.sunInt * sunlit) * ao * low * vr;
+              const lum = Math.round((light.ambient * sideDim + light.sunInt * sunlit) * low * vr * 14) / 14;
               c2 = mix(shade(base, lum), shade(light.sunColor, lum), 0.12 * sunlit);
             }
             pos.push(x, y, z);
             dir.push(d);
             col.push(c2);
+            tex.push(MT[id][d === 2 ? 1 : 0] | (mat.emissive ? 0x80 : 0));
+            aos.push(aoMask);
           }
         }
       }
     }
-    c.faces = { n: dir.length, pos: new Float32Array(pos), dir: new Uint8Array(dir), col: new Uint32Array(col) };
+    c.faces = {
+      n: dir.length, pos: new Float32Array(pos), dir: new Uint8Array(dir), col: new Uint32Array(col),
+      tex: new Uint8Array(tex), ao: new Uint8Array(aos),
+    };
     c.dirty = false;
   }
 }
