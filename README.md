@@ -3,9 +3,10 @@
 A browser-based 2.5D pixel-art metroidvania written in TypeScript on a plain HTML canvas.
 No 3D engine: every voxel is drawn by a small custom software rasterizer.
 
-You play a flannel-wearing 90s grunge guitarist (with a sonic-blue offset-waist guitar) touring four worlds to take down
-**Rikki Spandex**, the evil 80s hair-metal guitar god. Fight with your guitar:
-smash enemies with it, throw guitar picks, or unleash a distorted **power chord** shockwave.
+You play a flannel-wearing 90s grunge guitarist (with a sonic-blue offset-waist guitar) touring six 90s
+worlds — city streets, a VHS rental store, a skate park, a mall, an arcade and a concert venue — to take down
+**Rikki Spandex**, the evil 80s hair-metal guitar god. Fight with your guitar: smash enemies with it
+(hold for a charged finisher), throw guitar picks, or unleash a distorted **power chord** shockwave.
 
 ## Run it
 
