@@ -47,6 +47,10 @@ re-rolled for every new game (the seed is stored in your save so backtracking st
 4. **The Colosseum** — the concert venue: stadium stands, lighting trusses, speaker stacks, crowd
    barriers and pyro vents. Dash across the mosh pit to reach the main stage and face Rikki Spandex.
 
+Every world also hides a **mixtape** (+1 max health) sealed in a closet behind a breakable wall,
+and a **pick pouch** (+2 picks) on a tower that needs the double jump, so you'll want to backtrack
+with the tour van. Progress is saved in `localStorage`.
+
 ## How it works
 
 - `src/renderer.ts` — 384×216 framebuffer with a float z-buffer (1/z). Voxel faces are
