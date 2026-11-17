@@ -27,6 +27,17 @@ setupTouch(game, canvas);
 const unlock = () => game.audio.init();
 document.addEventListener('touchend', unlock, { passive: true });
 document.addEventListener('click', unlock);
+// iOS Safari ignores user-scalable=no: block double-tap zoom, pinch zoom and page scrolling
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+  const now = performance.now();
+  if (now - lastTouchEnd < 350) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+for (const g of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(g, (e) => e.preventDefault(), { passive: false });
+
 // pause when the app is backgrounded
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && game.state === 'play') game.state = 'pause';

@@ -13,7 +13,9 @@
     <link rel="icon" type="image/png" href="./icon-192.png" />
     <title>Power Chord</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #07060a; overflow: hidden; }
+      /* touch-action isn't inherited: disable double-tap/pinch zoom on every element */
+      *, *::before, *::after { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+      html, body { margin: 0; height: 100%; background: #07060a; overflow: hidden; position: fixed; width: 100%; }
       body {
         display: flex; align-items: center; justify-content: center;
         touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
