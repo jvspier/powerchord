@@ -33,14 +33,19 @@ npm run build    # type-check + production build into dist/
 
 ## The tour
 
-1. **Rain City** (Seattle, 1991) — boss: The A&R Man → learn **Power Chord**
-2. **Evergreen Woods** — blocked by an amp wall; boss: Mullet Mountain → learn **Stage Dive** (double jump)
-3. **Sunset Strip** — a cliff only a stage dive can scale; boss: DJ Synthax → learn **Mosh Dash**
-4. **Arena of Excess** — a chasm you need the dash for; final boss: Rikki Spandex
+Four 90s locations, each procedurally generated around a clear theme. The layout is
+re-rolled for every new game (the seed is stored in your save so backtracking stays consistent).
 
-Every world hides a **mixtape** (+1 max health) sealed behind an amp wall and a **pick pouch**
-(+2 picks) on a pillar that needs the double jump, so you'll want to backtrack with the tour van.
-Progress is saved in `localStorage`.
+1. **Rain City** — rainy downtown streets, brick buildings, parked cars, payphones.
+   Boss: The A&R Man → learn **Power Chord**
+2. **Rewind Video** — a VHS rental store: carpet, aisles of tape shelves with neon genre signs,
+   TV walls full of static, posters, the checkout counter. Blocked by a wall of TVs only a power chord
+   can blow out. Boss: Late Fee Larry → learn **Stage Dive** (double jump)
+3. **Galleria Mall** — checkerboard concourse, storefronts (arcades, record stores, clothes, toys),
+   palm planters, kiosks, a fountain and a food court. The escalator is busted, so you'll need to
+   stage-dive to the upper level. Boss: DJ Synthax → learn **Mosh Dash**
+4. **The Colosseum** — the concert venue: stadium stands, lighting trusses, speaker stacks, crowd
+   barriers and pyro vents. Dash across the mosh pit to reach the main stage and face Rikki Spandex.
 
 ## How it works
 

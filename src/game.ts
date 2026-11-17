@@ -21,9 +21,10 @@ interface Save {
   collected: string[];
   maxHp: number;
   maxPicks: number;
+  seed: number;
 }
 const SAVE_KEY = 'powerchord-save-v1';
-const freshSave = (): Save => ({ abilities: [], unlocked: 0, beaten: [], collected: [], maxHp: 5, maxPicks: 5 });
+const freshSave = (): Save => ({ abilities: [], unlocked: 0, beaten: [], collected: [], maxHp: 5, maxPicks: 5, seed: Math.floor(Math.random() * 1e6) });
 
 class Player extends Actor {
   picks = 5;
@@ -167,6 +168,7 @@ export class Game {
     }
     this.hasSave = !!s;
     this.save = s ?? freshSave();
+    if (s) this.persist(); // pins the run seed for saves made before seeds existed
     this.loadWorld(0, true);
   }
 
@@ -186,7 +188,7 @@ export class Game {
   loadWorld(i: number, quiet = false) {
     this.idx = i;
     this.def = WORLDS[i];
-    this.gen = generateWorld(i);
+    this.gen = generateWorld(i, this.save.seed);
     this.world = this.gen.world;
     this.world.rebuild(this.def.light, true);
     const r = this.r;
@@ -287,12 +289,14 @@ export class Game {
     switch (this.def.weather) {
       case 'rain':
         return { x, y, z, vx: -2, vy: -26 - Math.random() * 6, vz: 1, life: 9, max: 9, col: hex('#b8c8e0'), size: 0.08, g: 0 };
-      case 'pollen':
-        return { x, y: c.ty + Math.random() * 10 - 2, z, vx: 0.5, vy: 0.2, vz: 0.3, life: 6 + Math.random() * 6, max: 12, col: hex('#fff6c0'), size: 0.08, g: 0 };
+      case 'dust':
+        return { x, y: c.ty + Math.random() * 8 - 2, z, vx: 0.2, vy: 0.05, vz: 0.15, life: 6 + Math.random() * 6, max: 12, col: hex('#a8a090'), size: 0.06, g: 0 };
       case 'neon':
         return { x, y: c.ty + Math.random() * 12 - 2, z, vx: 0, vy: 0.5, vz: 0, life: 4 + Math.random() * 6, max: 10, col: Math.random() < 0.5 ? hex('#ff3aa8') : hex('#3af0ff'), size: 0.08, g: 0 };
-      default:
-        return { x, y: c.ty - 4 + Math.random() * 6, z, vx: (Math.random() - 0.5), vy: 2 + Math.random() * 2, vz: (Math.random() - 0.5), life: 2 + Math.random() * 4, max: 6, col: Math.random() < 0.5 ? hex('#ff8a20') : hex('#ffd040'), size: 0.09, g: 0 };
+      default: {
+        const cols = ['#ff3aa8', '#3af0ff', '#ffe23a', '#b45aff', '#ffffff'];
+        return { x, y: anywhere ? c.ty + Math.random() * 14 - 2 : c.ty + 14, z, vx: (Math.random() - 0.5), vy: -1.5 - Math.random(), vz: (Math.random() - 0.5), life: 10, max: 10, col: hex(cols[Math.floor(Math.random() * cols.length)]), size: 0.1, g: 0 };
+      }
     }
   }
 
@@ -496,7 +500,7 @@ export class Game {
       else this.startAct('chord', 0.7);
     }
     if (inp.pressed('ShiftLeft', 'ShiftRight') && this.has('dash') && p.dashCd <= 0 && (p.onGround || !p.airDashUsed)) {
-      p.dashT = 0.2;
+      p.dashT = 0.22;
       p.dashCd = 0.55;
       if (!p.onGround) p.airDashUsed = true;
       const l = Math.hypot(mx, mz);
@@ -521,8 +525,8 @@ export class Game {
     let slow = p.actKind === 'smash' ? 0.35 : p.actKind === 'chord' ? 0.1 : 1;
     if (p.dashT > 0) {
       p.dashT -= dt;
-      p.vx = p.dashX * 23;
-      p.vz = p.dashZ * 23;
+      p.vx = p.dashX * 24;
+      p.vz = p.dashZ * 24;
       p.vy = 0;
       if (Math.random() < 0.8) this.spark(p.x, p.y + 1.2, p.z, hex('#e8e8ff'), 0.3);
     } else {
@@ -701,7 +705,7 @@ export class Game {
         }
     if (broke) {
       this.audio.sfx('break');
-      this.msg('THE AMP WALL CRUMBLES!', 2, hex('#ffe23a'));
+      this.msg('KRRRANG! THE WALL CRUMBLES!', 2, hex('#ffe23a'));
     }
   }
 
@@ -1106,11 +1110,22 @@ export class Game {
 
   updateWeather(dt: number) {
     const c = this.cam;
+    for (const [vx, vy, vz] of this.gen.vents) {
+      if (Math.abs(vx - c.tx) > 26 || Math.abs(vz - c.tz) > 26) continue;
+      const burst = Math.sin(this.time * 2.3 + vx * 0.7 + vz) > 0.3;
+      if (Math.random() < dt * (burst ? 30 : 4)) {
+        this.particles.push({
+          x: vx + (Math.random() - 0.5) * 0.6, y: vy + 0.1, z: vz + (Math.random() - 0.5) * 0.6,
+          vx: 0, vy: burst ? 5 + Math.random() * 4 : 1.5, vz: 0, life: 0.5, max: 0.5,
+          col: Math.random() < 0.5 ? hex('#ff7a20') : hex('#ffd040'), size: 0.22, g: -2,
+        });
+      }
+    }
     for (let i = 0; i < this.weather.length; i++) {
       const q = this.weather[i];
       q.life -= dt;
       q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt;
-      if (this.def.weather === 'pollen' || this.def.weather === 'neon') { q.x += Math.sin(this.time + i) * dt * 0.5; }
+      if (this.def.weather === 'dust' || this.def.weather === 'neon') { q.x += Math.sin(this.time + i) * dt * 0.5; }
       const far = Math.abs(q.x - c.tx) > 24 || Math.abs(q.z - c.tz) > 24;
       if (q.life <= 0 || far || q.y < c.ty - 12) this.weather[i] = this.newWeather(this.def.weather !== 'rain' || far);
     }
@@ -1174,10 +1189,10 @@ export class Game {
     const gx = this.gen.gateX;
     if (Math.abs(p.x - (gx - 8)) < 3) {
       const g = this.def.gate;
-      if (g === 'amp' && !this.has('chord')) this.prompt = 'A WALL OF AMPS. ONLY A POWER CHORD COULD BREAK IT.';
-      if (g === 'amp' && this.has('chord') && this.world.get(gx, Math.floor(p.y) + 1, Math.floor(this.gen.pathZ(gx))) !== 0) this.prompt = 'PRESS L: POWER CHORD THE AMPS!';
-      if (g === 'cliff' && !this.has('dive')) this.prompt = 'TOO HIGH TO CLIMB. A STAGE DIVE MIGHT DO IT...';
-      if (g === 'chasm' && !this.has('dash')) this.prompt = "TOO WIDE TO JUMP. YOU'LL NEED A MOSH DASH.";
+      if (g === 'amp' && !this.has('chord')) this.prompt = this.def.gateHint;
+      if (g === 'amp' && this.has('chord') && this.world.get(gx, Math.floor(p.y) + 1, Math.floor(this.gen.pathZ(gx))) !== 0) this.prompt = this.def.gateHintHave;
+      if (g === 'cliff' && !this.has('dive')) this.prompt = this.def.gateHint;
+      if (g === 'chasm' && !this.has('dash')) this.prompt = this.def.gateHint;
     }
     void dt;
   }
