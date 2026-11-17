@@ -76,6 +76,7 @@ export class Renderer {
 
   // occlusion cutaway: terrain faces above cutWY, nearer than cutZ and within
   // cutR (view-space, in the xy plane) of (cutX,cutY) are skipped
+  dither = false; // draw only every other pixel (see-through)
   cutActive = false;
   cutX = 0; cutY = 0; cutZ = 0; cutR2 = 0; cutWY = 0;
 
@@ -273,11 +274,15 @@ export class Renderer {
         for (let x = xs; x <= xe; x++, idx++, z += dz) {
           if (z >= depth[idx] * 0.99995 && ids[idx] === 0 && depth[idx] > 0) cbuf[idx] = shade(cbuf[idx], 0.55);
         }
-      } else if (xray) {
+      } else if (xray && !this.dither) {
         for (let x = xs; x <= xe; x++, idx++, z += dz) {
           const d = depth[idx];
           if (z > d) { depth[idx] = z; cbuf[idx] = color; ids[idx] = id; }
           else if (ids[idx] === 0 && ((x + y) & 1) === 0 && 1 / z - 1 / d > 0.8) cbuf[idx] = sil;
+        }
+      } else if (this.dither) {
+        for (let x = xs; x <= xe; x++, idx++, z += dz) {
+          if (((x + y) & 1) === 0 && z > depth[idx]) { depth[idx] = z; cbuf[idx] = color; ids[idx] = id; }
         }
       } else {
         for (let x = xs; x <= xe; x++, idx++, z += dz) {

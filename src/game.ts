@@ -305,6 +305,7 @@ export class Game {
   update(dt: number) {
     this.time += dt;
     const inp = this.input;
+    inp.pollPad();
     if (inp.pressed('Backquote')) this.showFps = !this.showFps;
     if (inp.pressed('KeyM')) {
       this.audio.init();
@@ -467,8 +468,9 @@ export class Game {
     const ix = (inp.held('KeyD', 'ArrowRight') ? 1 : 0) - (inp.held('KeyA', 'ArrowLeft') ? 1 : 0);
     const iy = (inp.held('KeyW', 'ArrowUp') ? 1 : 0) - (inp.held('KeyS', 'ArrowDown') ? 1 : 0);
     const cy = this.cam.yaw;
-    let mx = Math.sin(cy) * iy + Math.cos(cy) * ix;
-    let mz = Math.cos(cy) * iy - Math.sin(cy) * ix;
+    const jx = ix + inp.padX, jy = iy + inp.padY;
+    let mx = Math.sin(cy) * jy + Math.cos(cy) * jx;
+    let mz = Math.cos(cy) * jy - Math.sin(cy) * jx;
     const ml = Math.hypot(mx, mz);
     if (ml > 1) { mx /= ml; mz /= ml; }
 
@@ -553,7 +555,18 @@ export class Game {
     }
     if (!inp.held('Space') && p.vy > 4 && !p.jumpCut) { p.vy *= 0.5; p.jumpCut = true; }
 
+    const wasAir = !p.onGround, fallV = p.vy;
     p.physics(w, dt, p.dashT <= 0);
+    if (wasAir && p.onGround && fallV < -10) {
+      const gc = MATS[w.get(Math.floor(p.x), Math.floor(p.y - 0.5), Math.floor(p.z))].color;
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * TAU;
+        this.particles.push({ x: p.x + Math.cos(a) * 0.4, y: p.y + 0.1, z: p.z + Math.sin(a) * 0.4, vx: Math.cos(a) * 3, vy: 1.5, vz: Math.sin(a) * 3, life: 0.35, max: 0.35, col: mix(gc, 0xffffffff, 0.3), size: 0.14, g: 6 });
+      }
+    }
+    if (p.onGround && Math.hypot(p.vx, p.vz) > 6 && Math.random() < dt * 8) {
+      this.particles.push({ x: p.x, y: p.y + 0.05, z: p.z, vx: -p.vx * 0.05, vy: 1, vz: -p.vz * 0.05, life: 0.3, max: 0.3, col: hex('#c8c8c0'), size: 0.1, g: 2 });
+    }
 
     // hazards & falling
     if (p.onHazard) {
@@ -1258,9 +1271,13 @@ export class Game {
         drawModel(r, light, p.model, poseHumanoid(p.anim), p.x, p.y + p.stepOffset, p.z, p.yaw, 1, { flags: FLAG_XRAY, id: 1, flash: p.flashT > 0 });
       }
     }
+    const plz = r.toView(p.x, p.y + 1.4, p.z)[2];
     for (const e of this.enemies) {
       if (!r.sphereVisible(e.x, e.y + 1, e.z, 3 * e.scale, maxZ)) continue;
       const flash = e.flashT > 0;
+      // see-through when standing between the third-person camera and the player
+      const ez = r.toView(e.x, e.y + e.h * 0.5, e.z)[2];
+      r.dither = s > 0.5 && ez < plz - 1 && ez < 6;
       const fc = e.state === 'wind' || (e.state === 'charge' && e.cd === 0) ? hex('#ffe23a') : 0xffffffff;
       if (e.kind === 'drone') {
         const rot = mPivot(0, 1, 0, 0, e.anim.t * 25, 0);
@@ -1270,6 +1287,7 @@ export class Game {
         drawModel(r, light, e.model, poseHumanoid(e.anim), e.x, e.y + e.stepOffset, e.z, e.yaw, e.scale, { flags: FLAG_XRAY, id: 2, flash, flashColor: fc });
       }
     }
+    r.dither = false;
     // checkpoints
     for (const ck of this.checkpoints) {
       if (!r.sphereVisible(ck.x, ck.y + 1, ck.z, 3, maxZ)) continue;
@@ -1294,7 +1312,7 @@ export class Game {
       for (let i = 0; i < n; i++) {
         const a = (i / n) * TAU + this.time;
         const col = i % 2 ? wv.col : mix(wv.col, 0xffffffff, 0.5);
-        r.drawParticle(wv.x + Math.cos(a) * wv.r, wv.y + 0.3 + (i % 3) * 0.25 * fade, wv.z + Math.sin(a) * wv.r, 0.22, col);
+        r.drawParticle(wv.x + Math.cos(a) * wv.r, wv.y + 0.2 + (i % 3) * 0.35 * fade, wv.z + Math.sin(a) * wv.r, wv.friendly ? 0.34 : 0.26, col);
       }
     }
     for (const q of this.particles) {

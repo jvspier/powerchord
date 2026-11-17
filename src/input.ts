@@ -43,10 +43,30 @@ export class Input {
     this.mouseDX = 0;
   }
 
-  // gamepad (polled)
-  pad(): Gamepad | null {
+  // ---- gamepad: buttons are mapped onto the equivalent keyboard codes ----
+  padX = 0;
+  padY = 0;
+  private padPrev: boolean[] = [];
+  private static PAD_MAP: Record<number, string> = {
+    0: 'Space', 1: 'KeyK', 2: 'KeyJ', 3: 'KeyL', 4: 'KeyC', 5: 'ShiftLeft', 6: 'KeyQ', 7: 'KeyE',
+    8: 'Escape', 9: 'Enter', 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight',
+  };
+  pollPad() {
     const pads = navigator.getGamepads?.() ?? [];
-    for (const p of pads) if (p) return p;
-    return null;
+    let pad: Gamepad | null = null;
+    for (const p of pads) if (p) { pad = p; break; }
+    this.padX = this.padY = 0;
+    if (!pad) return;
+    const dz = (v: number) => (Math.abs(v) < 0.22 ? 0 : v);
+    this.padX = dz(pad.axes[0] ?? 0);
+    this.padY = -dz(pad.axes[1] ?? 0);
+    for (const k in Input.PAD_MAP) {
+      const i = +k;
+      const on = !!pad.buttons[i]?.pressed;
+      const code = Input.PAD_MAP[i];
+      if (on && !this.padPrev[i]) { this.pressedSet.add(code); this.down.add(code); }
+      if (!on && this.padPrev[i]) this.down.delete(code);
+      this.padPrev[i] = on;
+    }
   }
 }
